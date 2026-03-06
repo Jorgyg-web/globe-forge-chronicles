@@ -1,0 +1,81 @@
+import React, { createContext, useContext, useReducer, useCallback, useEffect, useRef } from 'react';
+import { GameState, GameAction, CountryId } from '@/types/game';
+import { processAction } from '@/engine/GameEngine';
+import { INITIAL_COUNTRIES, initializeDiplomacy } from '@/data/countries';
+
+interface GameContextType {
+  state: GameState;
+  dispatch: (action: GameAction) => void;
+  selectedCountryId: CountryId | null;
+  setSelectedCountryId: (id: CountryId | null) => void;
+  activePanel: PanelType;
+  setActivePanel: (panel: PanelType) => void;
+}
+
+export type PanelType = 'overview' | 'economy' | 'military' | 'diplomacy' | 'technology' | 'infrastructure';
+
+const GameContext = createContext<GameContextType | null>(null);
+
+function createInitialState(): GameState {
+  const countries = initializeDiplomacy(INITIAL_COUNTRIES);
+  const countryMap: Record<CountryId, typeof countries[0]> = {};
+  countries.forEach(c => {
+    countryMap[c.id] = c;
+  });
+  // Player controls USA by default
+  countryMap['usa'] = { ...countryMap['usa'], isPlayerControlled: true };
+
+  return {
+    turn: 0,
+    year: 2025,
+    month: 1,
+    countries: countryMap,
+    wars: [],
+    alliances: [],
+    tradeAgreements: [],
+    playerCountryId: 'usa',
+    events: [],
+    speed: 'normal',
+    paused: true,
+  };
+}
+
+function gameReducer(state: GameState, action: GameAction): GameState {
+  return processAction(state, action);
+}
+
+export function GameProvider({ children }: { children: React.ReactNode }) {
+  const [state, dispatch] = useReducer(gameReducer, null, createInitialState);
+  const [selectedCountryId, setSelectedCountryId] = React.useState<CountryId | null>('usa');
+  const [activePanel, setActivePanel] = React.useState<PanelType>('overview');
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  const speedMs = state.speed === 'slow' ? 3000 : state.speed === 'normal' ? 1500 : 700;
+
+  useEffect(() => {
+    if (!state.paused) {
+      intervalRef.current = setInterval(() => {
+        dispatch({ type: 'NEXT_TURN' });
+      }, speedMs);
+    }
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [state.paused, speedMs]);
+
+  const wrappedDispatch = useCallback((action: GameAction) => {
+    dispatch(action);
+  }, []);
+
+  return (
+    <GameContext.Provider value={{ state, dispatch: wrappedDispatch, selectedCountryId, setSelectedCountryId, activePanel, setActivePanel }}>
+      {children}
+    </GameContext.Provider>
+  );
+}
+
+export function useGame() {
+  const ctx = useContext(GameContext);
+  if (!ctx) throw new Error('useGame must be used within GameProvider');
+  return ctx;
+}
