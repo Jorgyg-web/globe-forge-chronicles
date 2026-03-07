@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700;800;900&family=Orbitron:wght@400;500;600;700;800;900&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,68 +6,75 @@
 
 @layer base {
   :root {
-    --background: 220 20% 7%;
-    --foreground: 45 10% 90%;
+    --background: 225 25% 6%;
+    --foreground: 40 15% 92%;
 
-    --card: 220 18% 10%;
-    --card-foreground: 45 10% 90%;
+    --card: 225 22% 9%;
+    --card-foreground: 40 15% 92%;
 
-    --popover: 220 18% 12%;
-    --popover-foreground: 45 10% 90%;
+    --popover: 225 22% 11%;
+    --popover-foreground: 40 15% 92%;
 
-    --primary: 45 90% 55%;
-    --primary-foreground: 220 20% 7%;
+    --primary: 42 100% 58%;
+    --primary-foreground: 225 25% 6%;
 
-    --secondary: 150 40% 35%;
-    --secondary-foreground: 150 20% 95%;
+    --secondary: 160 50% 38%;
+    --secondary-foreground: 160 20% 95%;
 
-    --muted: 220 15% 15%;
-    --muted-foreground: 220 10% 55%;
+    --muted: 225 18% 13%;
+    --muted-foreground: 225 12% 50%;
 
-    --accent: 150 40% 35%;
-    --accent-foreground: 150 20% 95%;
+    --accent: 160 50% 38%;
+    --accent-foreground: 160 20% 95%;
 
-    --destructive: 0 70% 50%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 15% 18%;
-    --input: 220 15% 18%;
-    --ring: 45 90% 55%;
+    --border: 225 18% 16%;
+    --input: 225 18% 16%;
+    --ring: 42 100% 58%;
 
-    --radius: 0.375rem;
+    --radius: 0.5rem;
 
-    --sidebar-background: 220 18% 9%;
-    --sidebar-foreground: 45 10% 90%;
-    --sidebar-primary: 45 90% 55%;
-    --sidebar-primary-foreground: 220 20% 7%;
-    --sidebar-accent: 220 15% 15%;
-    --sidebar-accent-foreground: 45 10% 90%;
-    --sidebar-border: 220 15% 18%;
-    --sidebar-ring: 45 90% 55%;
+    --sidebar-background: 225 22% 8%;
+    --sidebar-foreground: 40 15% 92%;
+    --sidebar-primary: 42 100% 58%;
+    --sidebar-primary-foreground: 225 25% 6%;
+    --sidebar-accent: 225 18% 13%;
+    --sidebar-accent-foreground: 40 15% 92%;
+    --sidebar-border: 225 18% 16%;
+    --sidebar-ring: 42 100% 58%;
 
     /* Game-specific tokens */
-    --warning: 30 90% 50%;
-    --warning-foreground: 30 10% 10%;
-    --success: 150 60% 40%;
-    --success-foreground: 150 10% 95%;
-    --info: 210 70% 50%;
+    --warning: 35 95% 55%;
+    --warning-foreground: 35 10% 10%;
+    --success: 155 65% 42%;
+    --success-foreground: 155 10% 95%;
+    --info: 210 75% 55%;
     --info-foreground: 210 10% 95%;
-    --danger: 0 70% 50%;
+    --danger: 0 72% 51%;
     --danger-foreground: 0 0% 100%;
 
-    --panel: 220 18% 9%;
-    --panel-header: 220 18% 12%;
-    --panel-border: 220 15% 20%;
+    --panel: 225 22% 8%;
+    --panel-header: 225 22% 11%;
+    --panel-border: 225 18% 18%;
+    --panel-highlight: 225 22% 14%;
 
-    --stat-positive: 150 60% 45%;
-    --stat-negative: 0 70% 55%;
-    --stat-neutral: 45 90% 55%;
+    --stat-positive: 155 65% 48%;
+    --stat-negative: 0 72% 58%;
+    --stat-neutral: 42 100% 58%;
 
-    --map-land: 220 15% 20%;
-    --map-land-hover: 220 15% 28%;
-    --map-land-selected: 45 90% 55%;
-    --map-water: 220 25% 12%;
-    --map-border: 220 15% 30%;
+    --map-land: 225 18% 18%;
+    --map-land-hover: 225 18% 25%;
+    --map-land-selected: 42 100% 58%;
+    --map-water: 225 30% 10%;
+    --map-border: 225 18% 28%;
+    --map-glow: 42 100% 58%;
+
+    /* Gradient tokens */
+    --gradient-gold: linear-gradient(135deg, hsl(42 100% 58%), hsl(30 100% 45%));
+    --gradient-panel: linear-gradient(180deg, hsl(225 22% 11%) 0%, hsl(225 22% 8%) 100%);
+    --gradient-danger: linear-gradient(135deg, hsl(0 72% 51%), hsl(350 70% 45%));
 
     font-family: 'Inter', system-ui, sans-serif;
   }
@@ -80,10 +87,32 @@
 
   body {
     @apply bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Custom scrollbar for webkit */
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted));
+    border-radius: 999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--muted-foreground));
   }
 }
 
 @layer utilities {
+  .font-display {
+    font-family: 'Orbitron', sans-serif;
+  }
+
   .font-mono-game {
     font-family: 'JetBrains Mono', monospace;
   }
@@ -105,7 +134,11 @@
   }
 
   .bg-panel-header {
-    background-color: hsl(var(--panel-header));
+    background: linear-gradient(180deg, hsl(var(--panel-header)) 0%, hsl(var(--panel)) 100%);
+  }
+
+  .bg-panel-highlight {
+    background-color: hsl(var(--panel-highlight));
   }
 
   .border-panel {
@@ -113,15 +146,19 @@
   }
 
   .glow-primary {
-    box-shadow: 0 0 20px hsl(var(--primary) / 0.15), 0 0 40px hsl(var(--primary) / 0.05);
+    box-shadow: 0 0 20px hsl(var(--primary) / 0.15), 0 0 40px hsl(var(--primary) / 0.05), inset 0 1px 0 hsl(var(--primary) / 0.1);
   }
 
   .glow-success {
-    box-shadow: 0 0 15px hsl(var(--success) / 0.2);
+    box-shadow: 0 0 15px hsl(var(--success) / 0.2), inset 0 1px 0 hsl(var(--success) / 0.1);
   }
 
   .glow-danger {
-    box-shadow: 0 0 15px hsl(var(--danger) / 0.2);
+    box-shadow: 0 0 15px hsl(var(--danger) / 0.2), inset 0 1px 0 hsl(var(--danger) / 0.1);
+  }
+
+  .glow-info {
+    box-shadow: 0 0 15px hsl(var(--info) / 0.2), inset 0 1px 0 hsl(var(--info) / 0.1);
   }
 
   .scrollbar-thin {
@@ -131,8 +168,139 @@
 
   .game-grid-bg {
     background-image: 
-      linear-gradient(hsl(var(--border) / 0.3) 1px, transparent 1px),
-      linear-gradient(90deg, hsl(var(--border) / 0.3) 1px, transparent 1px);
+      linear-gradient(hsl(var(--border) / 0.2) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--border) / 0.2) 1px, transparent 1px);
     background-size: 20px 20px;
+  }
+
+  /* Panel card with subtle border glow */
+  .game-panel {
+    @apply border border-border rounded-lg overflow-hidden;
+    background: hsl(var(--card));
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .game-panel:hover {
+    border-color: hsl(var(--border) / 0.8);
+  }
+
+  .game-panel-header {
+    @apply px-3 py-2 border-b border-border flex items-center gap-2;
+    background: linear-gradient(180deg, hsl(var(--panel-header)) 0%, hsl(var(--card)) 100%);
+  }
+
+  .game-panel-header h3 {
+    @apply text-[10px] font-mono font-semibold text-primary uppercase tracking-widest;
+  }
+
+  /* Gradient text */
+  .text-gradient-gold {
+    background: linear-gradient(135deg, hsl(42 100% 58%), hsl(30 100% 70%));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Button styles */
+  .game-btn {
+    @apply px-3 py-1.5 text-[10px] font-mono font-semibold rounded-md border transition-all duration-200;
+  }
+
+  .game-btn-primary {
+    @apply game-btn bg-primary text-primary-foreground border-primary/50;
+    box-shadow: 0 2px 8px hsl(var(--primary) / 0.25);
+  }
+
+  .game-btn-primary:hover {
+    @apply opacity-90;
+    box-shadow: 0 4px 16px hsl(var(--primary) / 0.35);
+    transform: translateY(-1px);
+  }
+
+  .game-btn-secondary {
+    @apply game-btn bg-muted text-foreground border-border;
+  }
+
+  .game-btn-secondary:hover {
+    @apply bg-accent text-accent-foreground;
+    transform: translateY(-1px);
+  }
+
+  .game-btn-danger {
+    @apply game-btn border-danger/50 text-danger bg-danger/5;
+  }
+
+  .game-btn-danger:hover {
+    @apply bg-danger/15;
+    box-shadow: 0 2px 8px hsl(var(--danger) / 0.2);
+  }
+
+  /* Stat mini card */
+  .stat-card {
+    @apply rounded-lg p-2.5;
+    background: hsl(var(--muted) / 0.5);
+    border: 1px solid hsl(var(--border) / 0.5);
+    transition: all 0.2s ease;
+  }
+
+  .stat-card:hover {
+    background: hsl(var(--muted) / 0.8);
+    border-color: hsl(var(--border));
+  }
+
+  /* Map tooltip */
+  .map-tooltip {
+    @apply rounded-lg px-3 py-2 text-xs;
+    background: hsl(var(--popover));
+    border: 1px solid hsl(var(--border));
+    box-shadow: 0 8px 32px hsl(0 0% 0% / 0.5);
+    pointer-events: none;
+  }
+
+  /* Animate entrance */
+  .animate-panel-in {
+    animation: panelIn 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes panelIn {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Progress bar with shimmer */
+  .progress-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .progress-shimmer::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, hsl(0 0% 100% / 0.15), transparent);
+    animation: shimmer 2s ease-in-out infinite;
+  }
+
+  @keyframes shimmer {
+    100% { left: 100%; }
+  }
+
+  /* Badge pulse for notifications */
+  .badge-pulse {
+    animation: badgePulse 2s ease-in-out infinite;
+  }
+
+  @keyframes badgePulse {
+    0%, 100% { box-shadow: 0 0 0 0 hsl(var(--danger) / 0.4); }
+    50% { box-shadow: 0 0 0 6px hsl(var(--danger) / 0); }
   }
 }
