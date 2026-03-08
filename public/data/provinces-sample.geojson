@@ -1,0 +1,35 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "provinceId": "usa_ne", "provinceName": "Northeast", "countryId": "usa", "terrainType": "urban" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-80, 42], [-72, 43], [-68, 41], [-70, 38], [-75, 37], [-80, 39], [-80, 42]]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "provinceId": "usa_se", "provinceName": "Southeast", "countryId": "usa", "terrainType": "plains" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-90, 37], [-80, 39], [-75, 37], [-78, 30], [-82, 28], [-90, 30], [-90, 37]]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "provinceId": "usa_mw", "provinceName": "Midwest", "countryId": "usa", "terrainType": "plains" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-100, 47], [-90, 47], [-80, 42], [-90, 37], [-100, 37], [-104, 42], [-100, 47]]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "provinceId": "usa_sw", "provinceName": "Southwest", "countryId": "usa", "terrainType": "desert" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-115, 37], [-100, 37], [-90, 30], [-97, 26], [-105, 26], [-115, 32], [-115, 37]]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "provinceId": "usa_w", "provinceName": "West Coast", "countryId": "usa", "terrainType": "coastal" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-125, 48], [-115, 47], [-115, 37], [-115, 32], [-120, 33], [-125, 38], [-125, 48]]] }
+    },
+    {
+      "type": "Feature",
+      "properties": { "provinceId": "usa_ak", "provinceName": "Alaska & Pacific", "countryId": "usa", "terrainType": "arctic" },
+      "geometry": { "type": "Polygon", "coordinates": [[[-170, 66], [-155, 70], [-140, 65], [-135, 58], [-150, 55], [-165, 58], [-170, 66]]] }
+    }
+  ]
+}
