@@ -63,9 +63,11 @@ function inferTerrain(lat: number, lng: number): TerrainType {
   if (lat > 27 && lat < 40 && lng > 70 && lng < 100) return 'mountain';
   if (lat > 36 && lat < 48 && lng > 5 && lng < 18) return 'mountain';
   if (lat > -55 && lat < 10 && lng > -80 && lng < -64) return 'mountain';
+  // Jungle: equatorial regions
+  if (lat > -10 && lat < 10 && lng > -80 && lng < -40) return 'jungle';
+  if (lat > -8 && lat < 10 && lng > 95 && lng < 145) return 'jungle';
+  if (lat > -5 && lat < 10 && lng > 10 && lng < 40) return 'jungle';
   if (lat > 50 && lat < 66 && lng > 20 && lng < 180) return 'forest';
-  if (lat > -10 && lat < 10 && lng > -80 && lng < -40) return 'forest';
-  if (lat > -8 && lat < 10 && lng > 95 && lng < 145) return 'forest';
   if (lat > 45 && lat < 60 && lng > -140 && lng < -60) return 'forest';
   return 'plains';
 }
@@ -200,8 +202,8 @@ export async function generateWorld(): Promise<WorldData> {
       stability: 40 + Math.floor(Math.random() * 40),
       corruption: 5 + Math.floor(Math.random() * 30),
       resourceProduction: {
-        food: terrain === 'plains' ? 30 : terrain === 'forest' ? 15 : 5,
-        oil: terrain === 'desert' ? 20 : Math.random() > 0.7 ? 10 : 0,
+        food: terrain === 'plains' ? 30 : terrain === 'forest' ? 15 : terrain === 'jungle' ? 20 : 5,
+        oil: terrain === 'desert' ? 20 : terrain === 'jungle' ? 5 : Math.random() > 0.7 ? 10 : 0,
         metal: terrain === 'mountain' ? 25 : Math.random() > 0.6 ? 10 : 0,
         electronics: dev > 60 ? 15 : 0,
         money: Math.floor(popEst / 100000) + dev * 2,
@@ -249,9 +251,9 @@ export async function generateWorld(): Promise<WorldData> {
         stability: 50 + Math.floor(Math.random() * 30),
         corruption: 5 + Math.floor(Math.random() * 20),
         resourceProduction: {
-          food: terrain === 'plains' ? 30 : terrain === 'forest' ? 15 : 5,
-          oil: terrain === 'desert' ? 20 : Math.random() > 0.7 ? 10 : 0,
-          metal: terrain === 'mountain' ? 25 : Math.random() > 0.6 ? 10 : 0,
+        food: terrain === 'plains' ? 30 : terrain === 'forest' ? 15 : terrain === 'jungle' ? 20 : 5,
+        oil: terrain === 'desert' ? 20 : terrain === 'jungle' ? 5 : Math.random() > 0.7 ? 10 : 0,
+        metal: terrain === 'mountain' ? 25 : Math.random() > 0.6 ? 10 : 0,
           electronics: dev > 60 ? 15 : 0,
           money: Math.floor(statePop / 100000) + dev * 2,
         },

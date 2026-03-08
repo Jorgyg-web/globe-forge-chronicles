@@ -88,10 +88,20 @@ export interface Province {
   geometry: string; // SVG path string for map rendering
 }
 
-export type TerrainType = 'plains' | 'forest' | 'mountain' | 'desert' | 'urban' | 'coastal' | 'arctic';
+export type TerrainType = 'plains' | 'forest' | 'mountain' | 'desert' | 'jungle' | 'urban' | 'coastal' | 'arctic';
 
 export const TERRAIN_DEFENSE_BONUS: Record<TerrainType, number> = {
-  plains: 0, forest: 0.15, mountain: 0.35, desert: -0.05, urban: 0.25, coastal: 0.1, arctic: 0.1,
+  plains: 0, forest: 0.2, mountain: 0.4, desert: -0.05, jungle: 0.25, urban: 0.25, coastal: 0.1, arctic: 0.1,
+};
+
+/** Higher = slower movement */
+export const TERRAIN_MOVEMENT_COST: Record<TerrainType, number> = {
+  plains: 1, forest: 1.4, mountain: 2, desert: 1.3, jungle: 1.6, urban: 0.8, coastal: 1, arctic: 1.8,
+};
+
+/** Supply efficiency multiplier (1 = normal, lower = worse) */
+export const TERRAIN_SUPPLY_EFFICIENCY: Record<TerrainType, number> = {
+  plains: 1, forest: 0.85, mountain: 0.7, desert: 0.6, jungle: 0.55, urban: 1.1, coastal: 0.95, arctic: 0.5,
 };
 
 // ─── Construction Queue ───

@@ -1,7 +1,7 @@
 import {
   GameState, GameAction, Country, CountryId, Province, ProvinceId, ArmyId,
   Army, ArmyUnit, War, BattleReport, GameEvent, ConstructionItem, ProductionItem,
-  UnitType, BuildingType, BUILDING_INFO, TERRAIN_DEFENSE_BONUS, Resources, RESOURCE_KEYS,
+  UnitType, BuildingType, BUILDING_INFO, TERRAIN_DEFENSE_BONUS, TERRAIN_MOVEMENT_COST, TERRAIN_SUPPLY_EFFICIENCY, Resources, RESOURCE_KEYS,
 } from '@/types/game';
 import { UNIT_STATS } from '@/data/unitStats';
 import { TECHNOLOGIES } from '@/data/technologies';
@@ -62,10 +62,7 @@ function canAfford(have: Resources, cost: Resources): boolean {
 }
 function uid(): string { return Math.random().toString(36).slice(2, 10); }
 
-// Terrain movement cost multiplier (higher = slower)
-const TERRAIN_MOVEMENT_COST: Record<string, number> = {
-  plains: 1, coastal: 1, urban: 0.8, forest: 1.4, desert: 1.3, mountain: 2, arctic: 1.8,
-};
+// TERRAIN_MOVEMENT_COST and TERRAIN_SUPPLY_EFFICIENCY are now imported from types/game
 
 // ─── Building ───
 function handleBuild(state: GameState, provId: ProvinceId, buildingType: BuildingType): GameState {
@@ -407,12 +404,14 @@ function processResourceIncome(state: GameState): GameState {
       }
     }
 
-    // Army supply cost
+    // Army supply cost (terrain supply efficiency affects upkeep)
     const armies = Object.values(s.armies).filter(a => a.countryId === countryId);
     let supplyCost = 0;
     for (const army of armies) {
+      const prov = s.provinces[army.provinceId];
+      const supplyEff = prov ? (TERRAIN_SUPPLY_EFFICIENCY[prov.terrain] ?? 1) : 1;
       for (const u of army.units) {
-        supplyCost += UNIT_STATS[u.type].supplyUsage * u.count;
+        supplyCost += (UNIT_STATS[u.type].supplyUsage * u.count) / supplyEff;
       }
     }
     income.money -= supplyCost;
