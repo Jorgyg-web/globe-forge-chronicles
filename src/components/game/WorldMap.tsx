@@ -15,7 +15,14 @@ const WorldMap = () => {
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
-  const [moveMode, setMoveMode] = useState(false);
+
+  // Auto-activate move mode when a player army is selected and stationary
+  const moveMode = useMemo(() => {
+    if (!selectedArmyId) return false;
+    const army = state.armies[selectedArmyId];
+    if (!army) return false;
+    return army.countryId === state.playerCountryId && !army.targetProvinceId;
+  }, [selectedArmyId, state.armies, state.playerCountryId]);
 
   const showProvinces = zoom >= 1.0;
   const showDetails = zoom >= 1.8;
@@ -43,11 +50,15 @@ const WorldMap = () => {
     return new Set(prov?.adjacentProvinces ?? []);
   }, [moveMode, selectedArmyId, state.armies, state.provinces]);
 
+  const setMoveMode = useCallback((_v: boolean) => {
+    // moveMode is now auto-managed via selectedArmyId
+  }, []);
+
   const mapContextValue = useMemo(() => ({
     zoom, showProvinces, showDetails, moveMode, setMoveMode, moveTargets,
     hoveredCountry, setHoveredCountry, hoveredProvince, setHoveredProvince,
     mousePos, containerRef: containerRef as React.RefObject<HTMLDivElement>,
-  }), [zoom, showProvinces, showDetails, moveMode, moveTargets, hoveredCountry, hoveredProvince, mousePos]);
+  }), [zoom, showProvinces, showDetails, moveMode, setMoveMode, moveTargets, hoveredCountry, hoveredProvince, mousePos]);
 
   if (worldLoading) {
     return (
@@ -69,6 +80,12 @@ const WorldMap = () => {
         <MapRenderer zoom={zoom} pan={pan} isPanning={isPanning} moveMode={moveMode} />
         <MapTooltipLayer isPanning={isPanning} />
         <MapControls zoom={zoom} onZoomIn={() => setZoom(p => Math.min(5, p + 0.4))} onZoomOut={() => setZoom(p => Math.max(0.5, p - 0.4))} onResetView={resetView} />
+        {moveMode && (
+          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 px-3 py-1.5 rounded-md text-xs font-mono animate-fade-in"
+            style={{ background: 'hsl(var(--primary) / 0.9)', color: 'hsl(var(--primary-foreground))' }}>
+            ⚔ Select destination province to move army
+          </div>
+        )}
       </div>
     </MapProvider>
   );
