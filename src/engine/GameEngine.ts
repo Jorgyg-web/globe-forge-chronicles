@@ -1,7 +1,7 @@
 import {
   GameState, GameAction, Country, CountryId, Province, ProvinceId, ArmyId,
   Army, ArmyUnit, War, BattleReport, GameEvent, ConstructionItem, ProductionItem,
-  UnitType, BuildingType, BUILDING_INFO, TERRAIN_DEFENSE_BONUS, Resources, RESOURCE_KEYS,
+  UnitType, BuildingType, BUILDING_INFO, TERRAIN_DEFENSE_BONUS, TERRAIN_MOVEMENT_COST, TERRAIN_SUPPLY_EFFICIENCY, Resources, RESOURCE_KEYS,
 } from '@/types/game';
 import { UNIT_STATS } from '@/data/unitStats';
 import { TECHNOLOGIES } from '@/data/technologies';
