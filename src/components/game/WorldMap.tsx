@@ -1,8 +1,5 @@
 import { useGame } from '@/context/GameContext';
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
-import { getProvincesForCountry } from '@/data/provinces';
-import { COUNTRY_POSITIONS } from './map/mapConstants';
-import { getProvinceLayout } from './map/mapLayout';
 import { MapProvider } from './map/MapContext';
 import MapRenderer from './map/MapRenderer';
 import MapTooltipLayer from './map/MapTooltipLayer';
@@ -20,8 +17,8 @@ const WorldMap = () => {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [moveMode, setMoveMode] = useState(false);
 
-  const showProvinces = zoom >= 1.4;
-  const showDetails = zoom >= 2.2;
+  const showProvinces = zoom >= 1.0; // Always show provinces now with polygon shapes
+  const showDetails = zoom >= 1.8;
 
   const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
@@ -38,17 +35,6 @@ const WorldMap = () => {
   const handleMouseUp = () => setIsPanning(false);
   const resetView = () => { setZoom(1); setPan({ x: 0, y: 0 }); };
 
-  const provinceLayouts = useMemo(() => {
-    const layouts: Record<string, ReturnType<typeof getProvinceLayout>> = {};
-    for (const cId of Object.keys(state.countries)) {
-      const pos = COUNTRY_POSITIONS[cId];
-      if (!pos) continue;
-      const provs = getProvincesForCountry(state.provinces, cId);
-      if (provs.length > 0) layouts[cId] = getProvinceLayout(provs, pos);
-    }
-    return layouts;
-  }, [state.countries, state.provinces]);
-
   const moveTargets = useMemo(() => {
     if (!moveMode || !selectedArmyId) return new Set<string>();
     const army = state.armies[selectedArmyId];
@@ -64,14 +50,13 @@ const WorldMap = () => {
     moveMode,
     setMoveMode,
     moveTargets,
-    provinceLayouts,
     hoveredCountry,
     setHoveredCountry,
     hoveredProvince,
     setHoveredProvince,
     mousePos,
     containerRef: containerRef as React.RefObject<HTMLDivElement>,
-  }), [zoom, showProvinces, showDetails, moveMode, moveTargets, provinceLayouts, hoveredCountry, hoveredProvince, mousePos]);
+  }), [zoom, showProvinces, showDetails, moveMode, moveTargets, hoveredCountry, hoveredProvince, mousePos]);
 
   return (
     <MapProvider value={mapContextValue}>

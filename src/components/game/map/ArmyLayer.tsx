@@ -1,67 +1,38 @@
 import React, { useMemo } from 'react';
 import { useGame } from '@/context/GameContext';
 import { useMapContext } from './MapContext';
-import { UNIT_STATS } from '@/data/unitStats';
 import { Army } from '@/types/game';
-import { COUNTRY_POSITIONS } from './mapConstants';
+import { getProvinceCentroid } from '@/data/provinceGeometry';
 
 const ArmyLayer: React.FC = () => {
   const { state, selectedArmyId, setSelectedArmyId, setActivePanel } = useGame();
-  const { showProvinces, provinceLayouts } = useMapContext();
 
   const armyPositions = useMemo(() => {
     const positions: { army: Army; x: number; y: number; targetX?: number; targetY?: number }[] = [];
     for (const army of Object.values(state.armies)) {
-      const prov = state.provinces[army.provinceId];
-      if (!prov) continue;
-
-      let x = 0, y = 0;
-      for (const [, layout] of Object.entries(provinceLayouts)) {
-        const pl = layout.find(l => l.province.id === prov.id);
-        if (pl) { x = pl.x + pl.w / 2; y = pl.y + pl.h / 2; break; }
-      }
-      if (x === 0) {
-        const countryPos = COUNTRY_POSITIONS[prov.countryId];
-        if (countryPos) { x = countryPos.x + countryPos.w / 2; y = countryPos.y + countryPos.h / 2; }
-      }
-
+      const centroid = getProvinceCentroid(army.provinceId);
       let targetX: number | undefined, targetY: number | undefined;
       if (army.targetProvinceId) {
-        const targetProv = state.provinces[army.targetProvinceId];
-        if (targetProv) {
-          for (const [, layout] of Object.entries(provinceLayouts)) {
-            const tl = layout.find(l => l.province.id === targetProv.id);
-            if (tl) { targetX = tl.x + tl.w / 2; targetY = tl.y + tl.h / 2; break; }
-          }
-          if (!targetX) {
-            const tp = COUNTRY_POSITIONS[targetProv.countryId];
-            if (tp) { targetX = tp.x + tp.w / 2; targetY = tp.y + tp.h / 2; }
-          }
-        }
+        const tc = getProvinceCentroid(army.targetProvinceId);
+        targetX = tc.x;
+        targetY = tc.y;
       }
-
-      positions.push({ army, x, y, targetX, targetY });
+      positions.push({ army, x: centroid.x, y: centroid.y, targetX, targetY });
     }
     return positions;
-  }, [state.armies, state.provinces, provinceLayouts]);
+  }, [state.armies]);
 
   const battlePositions = useMemo(() => {
     return (state.activeBattles ?? []).map(b => {
-      let x = 0, y = 0;
-      for (const [, layout] of Object.entries(provinceLayouts)) {
-        const pl = layout.find(l => l.province.id === b.provinceId);
-        if (pl) { x = pl.x + pl.w / 2; y = pl.y + pl.h / 2; break; }
-      }
-      return { ...b, x, y };
-    }).filter(b => b.x > 0);
-  }, [state.activeBattles, provinceLayouts]);
+      const c = getProvinceCentroid(b.provinceId);
+      return { ...b, x: c.x, y: c.y };
+    });
+  }, [state.activeBattles]);
 
   const handleArmyClick = (armyId: string) => {
     setSelectedArmyId(armyId);
     setActivePanel('military');
   };
-
-  if (!showProvinces) return null;
 
   return (
     <>

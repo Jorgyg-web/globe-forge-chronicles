@@ -1,5 +1,4 @@
 import React, { createContext, useContext } from 'react';
-import { ProvinceLayoutItem } from './mapLayout';
 
 export interface MapContextType {
   zoom: number;
@@ -8,7 +7,6 @@ export interface MapContextType {
   moveMode: boolean;
   setMoveMode: (v: boolean) => void;
   moveTargets: Set<string>;
-  provinceLayouts: Record<string, ProvinceLayoutItem[]>;
   hoveredCountry: string | null;
   setHoveredCountry: (id: string | null) => void;
   hoveredProvince: string | null;
