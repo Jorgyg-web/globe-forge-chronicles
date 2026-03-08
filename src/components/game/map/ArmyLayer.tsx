@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { useGame } from '@/context/GameContext';
+import { useMapContext } from './MapContext';
 import { Army } from '@/types/game';
 import { getProvinceCentroid } from '@/data/provinceGeometry';
 import { UNIT_STATS } from '@/data/unitStats';
