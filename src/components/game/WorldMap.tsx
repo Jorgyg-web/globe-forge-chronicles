@@ -6,7 +6,7 @@ import MapTooltipLayer from './map/MapTooltipLayer';
 import MapControls from './map/MapControls';
 
 const WorldMap = () => {
-  const { state, selectedArmyId } = useGame();
+  const { state, selectedArmyId, worldLoading } = useGame();
   const [hoveredCountry, setHoveredCountry] = useState<string | null>(null);
   const [hoveredProvince, setHoveredProvince] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
@@ -17,7 +17,7 @@ const WorldMap = () => {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [moveMode, setMoveMode] = useState(false);
 
-  const showProvinces = zoom >= 1.0; // Always show provinces now with polygon shapes
+  const showProvinces = zoom >= 1.0;
   const showDetails = zoom >= 1.8;
 
   const handleWheel = useCallback((e: WheelEvent) => {
@@ -44,19 +44,21 @@ const WorldMap = () => {
   }, [moveMode, selectedArmyId, state.armies, state.provinces]);
 
   const mapContextValue = useMemo(() => ({
-    zoom,
-    showProvinces,
-    showDetails,
-    moveMode,
-    setMoveMode,
-    moveTargets,
-    hoveredCountry,
-    setHoveredCountry,
-    hoveredProvince,
-    setHoveredProvince,
-    mousePos,
-    containerRef: containerRef as React.RefObject<HTMLDivElement>,
+    zoom, showProvinces, showDetails, moveMode, setMoveMode, moveTargets,
+    hoveredCountry, setHoveredCountry, hoveredProvince, setHoveredProvince,
+    mousePos, containerRef: containerRef as React.RefObject<HTMLDivElement>,
   }), [zoom, showProvinces, showDetails, moveMode, moveTargets, hoveredCountry, hoveredProvince, mousePos]);
+
+  if (worldLoading) {
+    return (
+      <div className="w-full h-full flex items-center justify-center" style={{ background: 'hsl(var(--map-water))' }}>
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm font-mono text-muted-foreground">Generating world map...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <MapProvider value={mapContextValue}>
@@ -64,7 +66,6 @@ const WorldMap = () => {
         style={{ background: 'hsl(var(--map-water))' }}
         onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}>
         <div className="absolute inset-0 pointer-events-none z-10" style={{ background: 'radial-gradient(ellipse at center, transparent 50%, hsl(var(--background) / 0.4) 100%)' }} />
-
         <MapRenderer zoom={zoom} pan={pan} isPanning={isPanning} moveMode={moveMode} />
         <MapTooltipLayer isPanning={isPanning} />
         <MapControls zoom={zoom} onZoomIn={() => setZoom(p => Math.min(5, p + 0.4))} onZoomOut={() => setZoom(p => Math.max(0.5, p - 0.4))} onResetView={resetView} />
