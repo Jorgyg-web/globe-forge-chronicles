@@ -1,18 +1,21 @@
 import React, { createContext, useContext, useReducer, useCallback, useEffect, useRef } from 'react';
-import { GameState, GameAction, CountryId } from '@/types/game';
+import { GameState, GameAction, CountryId, ProvinceId } from '@/types/game';
 import { processAction } from '@/engine/GameEngine';
 import { INITIAL_COUNTRIES, initializeDiplomacy } from '@/data/countries';
+import { INITIAL_PROVINCES } from '@/data/provinces';
 
 interface GameContextType {
   state: GameState;
   dispatch: (action: GameAction) => void;
   selectedCountryId: CountryId | null;
   setSelectedCountryId: (id: CountryId | null) => void;
+  selectedProvinceId: ProvinceId | null;
+  setSelectedProvinceId: (id: ProvinceId | null) => void;
   activePanel: PanelType;
   setActivePanel: (panel: PanelType) => void;
 }
 
-export type PanelType = 'overview' | 'economy' | 'military' | 'diplomacy' | 'technology' | 'infrastructure';
+export type PanelType = 'overview' | 'economy' | 'military' | 'diplomacy' | 'technology' | 'infrastructure' | 'province';
 
 const GameContext = createContext<GameContextType | null>(null);
 
@@ -22,14 +25,19 @@ function createInitialState(): GameState {
   countries.forEach(c => {
     countryMap[c.id] = c;
   });
-  // Player controls USA by default
   countryMap['usa'] = { ...countryMap['usa'], isPlayerControlled: true };
+
+  const provinceMap: Record<ProvinceId, typeof INITIAL_PROVINCES[0]> = {};
+  INITIAL_PROVINCES.forEach(p => {
+    provinceMap[p.id] = p;
+  });
 
   return {
     turn: 0,
     year: 2025,
     month: 1,
     countries: countryMap,
+    provinces: provinceMap,
     wars: [],
     alliances: [],
     tradeAgreements: [],
@@ -47,6 +55,7 @@ function gameReducer(state: GameState, action: GameAction): GameState {
 export function GameProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(gameReducer, null, createInitialState);
   const [selectedCountryId, setSelectedCountryId] = React.useState<CountryId | null>('usa');
+  const [selectedProvinceId, setSelectedProvinceId] = React.useState<ProvinceId | null>(null);
   const [activePanel, setActivePanel] = React.useState<PanelType>('overview');
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -68,7 +77,12 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <GameContext.Provider value={{ state, dispatch: wrappedDispatch, selectedCountryId, setSelectedCountryId, activePanel, setActivePanel }}>
+    <GameContext.Provider value={{
+      state, dispatch: wrappedDispatch,
+      selectedCountryId, setSelectedCountryId,
+      selectedProvinceId, setSelectedProvinceId,
+      activePanel, setActivePanel,
+    }}>
       {children}
     </GameContext.Provider>
   );

@@ -276,6 +276,10 @@ export type GameAction =
   | { type: 'REMOVE_EMBARGO'; countryId: CountryId; targetId: CountryId }
   | { type: 'START_RESEARCH'; countryId: CountryId; techId: string }
   | { type: 'SET_CORRUPTION'; countryId: CountryId; level: number }
+  | { type: 'UPGRADE_PROVINCE_INFRA'; provinceId: ProvinceId; infra: keyof ProvinceInfrastructure }
+  | { type: 'UPGRADE_PROVINCE_INDUSTRY'; provinceId: ProvinceId; industry: keyof ProvinceIndustry }
+  | { type: 'BUILD_PROVINCE_BASE'; provinceId: ProvinceId }
+  | { type: 'GARRISON_PROVINCE'; provinceId: ProvinceId; troops: number }
   | { type: 'NEXT_TURN' }
   | { type: 'SET_SPEED'; speed: GameSpeed }
   | { type: 'TOGGLE_PAUSE' };
