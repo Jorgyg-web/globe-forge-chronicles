@@ -114,7 +114,7 @@ const ProvinceLayer: React.FC = () => {
         selectedProvinceId={selectedProvinceId}
         selectedCountryId={selectedCountryId}
         moveTargets={moveTargets}
-        showDetails={showDetails}
+        zoom={zoom}
         troopCounts={troopCounts}
       />
 
