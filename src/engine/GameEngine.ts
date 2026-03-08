@@ -1,4 +1,4 @@
-import { GameState, GameAction, Country, CountryId, MilitaryUnits, UnitType, War, Battle, GameEvent } from '@/types/game';
+import { GameState, GameAction, Country, CountryId, MilitaryUnits, UnitType, War, Battle, GameEvent, ProvinceId, Province } from '@/types/game';
 import { UNIT_STATS } from '@/data/unitStats';
 import { TECHNOLOGIES } from '@/data/technologies';
 
