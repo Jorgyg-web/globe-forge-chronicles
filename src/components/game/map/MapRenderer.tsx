@@ -1,5 +1,5 @@
 import React from 'react';
-import { CONTINENT_PATHS } from './mapConstants';
+import BaseMapLayer from './BaseMapLayer';
 import ProvinceLayer from './ProvinceLayer';
 import ArmyLayer from './ArmyLayer';
 
@@ -37,10 +37,8 @@ const MapRenderer: React.FC<MapRendererProps> = ({ zoom, pan, isPanning, moveMod
       {/* Ocean / water base */}
       <rect width="800" height="450" fill="hsl(var(--map-water))" opacity="0.15" />
 
-      {/* Continent land mass silhouettes (decorative background) */}
-      {CONTINENT_PATHS.map((d, i) => (
-        <path key={i} d={d} fill="hsl(var(--map-land))" stroke="hsl(var(--map-border))" strokeWidth="0.3" opacity="0.12" />
-      ))}
+      {/* World landmass base layer */}
+      <BaseMapLayer />
 
       <ProvinceLayer />
       <ArmyLayer />
