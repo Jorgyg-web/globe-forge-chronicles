@@ -28,7 +28,7 @@ import {
   ProjectionConfig,
   getDefaultProjectionConfig,
 } from './projection';
-import { computeCentroid, computeBounds } from '@/data/provinceGeometry';
+import { computeCentroid, computeBounds, updateProvinceGeometry, invalidateCentroidCache } from '@/data/provinceGeometry';
 import { Province } from '@/types/game';
 
 export class MapDataLoader {
