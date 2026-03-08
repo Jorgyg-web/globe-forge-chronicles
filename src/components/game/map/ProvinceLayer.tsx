@@ -1,5 +1,6 @@
 import React, { useMemo, useCallback } from 'react';
 import { useGame } from '@/context/GameContext';
+
 import { useMapContext } from './MapContext';
 import { getProvinceCentroid, computeBounds } from '@/data/provinceGeometry';
 import { StaticGeometryLayer, CachedProvinceData } from './ProvincePathCache';
