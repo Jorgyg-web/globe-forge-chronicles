@@ -1,12 +1,12 @@
 /**
- * World Generator — Real Administrative Regions
+ * World Generator — Hybrid: Admin-0 countries + Admin-1 for USA
  * 
- * Loads Natural Earth 50m Admin-1 GeoJSON to create provinces
- * with real names and borders (states, provinces, regions, etc.)
+ * Uses world-land.geojson (admin-0) for all countries.
+ * Uses ne_110m_admin_1 for US states subdivision.
+ * Each non-US country = 1 province (the country itself).
  */
 
 import { Country, Province, Building, TerrainType, Resources } from '@/types/game';
-import { Point, polygonArea, polygonCentroid } from './polygonUtils';
 import { projectPoint, getDefaultProjectionConfig } from './projection';
 import { updateProvinceGeometry, invalidateCentroidCache } from '@/data/provinceGeometry';
 
@@ -44,7 +44,7 @@ const COLOR_PALETTE = [
 ];
 
 const ISO_REMAP: Record<string, string> = {
-  'GBR': 'gbr', 'USA': 'usa', 'FRA': 'fra', 'DEU': 'deu',
+  'GBR': 'gbr', 'USA': 'usa', 'US1': 'usa', 'FRA': 'fra', 'DEU': 'deu',
   'RUS': 'rus', 'CHN': 'chn', 'JPN': 'jpn', 'IND': 'ind',
   'BRA': 'bra', 'KOR': 'kor', 'TUR': 'tur', 'SAU': 'sau',
   'AUS': 'aus', 'CAN': 'can', 'ITA': 'ita', 'IRN': 'irn',
@@ -80,19 +80,14 @@ function inferGovernment(name: string): Country['government']['type'] {
   return 'democracy';
 }
 
-// ─── Extract all coordinate rings from a GeoJSON geometry ─────
-function extractRings(geometry: any): number[][][] {
+// ─── Extract all outer rings from a GeoJSON geometry ─────
+function extractOuterRings(geometry: any): number[][][] {
   if (!geometry) return [];
   if (geometry.type === 'Polygon') {
-    return geometry.coordinates.map((ring: number[][]) => ring);
+    return [geometry.coordinates[0]]; // outer ring only
   }
   if (geometry.type === 'MultiPolygon') {
-    const rings: number[][][] = [];
-    for (const poly of geometry.coordinates) {
-      // Only outer ring of each polygon part
-      rings.push(poly[0]);
-    }
-    return rings;
+    return geometry.coordinates.map((poly: number[][][]) => poly[0]);
   }
   return [];
 }
@@ -108,6 +103,24 @@ function ringToSvgPathProjected(ring: number[][], cfg: ReturnType<typeof getDefa
   return parts.join(' ');
 }
 
+function geometryToSvgPath(geometry: any, cfg: ReturnType<typeof getDefaultProjectionConfig>): string {
+  const rings = extractOuterRings(geometry);
+  return rings.map(ring => ringToSvgPathProjected(ring, cfg)).filter(p => p).join(' ');
+}
+
+function getCentroidFromGeometry(geometry: any): { lat: number; lng: number } {
+  const rings = extractOuterRings(geometry);
+  let totalLat = 0, totalLng = 0, count = 0;
+  for (const ring of rings) {
+    for (const pt of ring) {
+      totalLng += pt[0];
+      totalLat += pt[1];
+      count++;
+    }
+  }
+  return count > 0 ? { lat: totalLat / count, lng: totalLng / count } : { lat: 0, lng: 0 };
+}
+
 export interface WorldData {
   countries: Country[];
   provinces: Province[];
@@ -115,67 +128,26 @@ export interface WorldData {
 }
 
 /**
- * Load the Natural Earth Admin-1 dataset and generate countries + provinces.
+ * Load admin-0 for all countries + admin-1 for US states.
  */
 export async function generateWorld(): Promise<WorldData> {
-  const response = await fetch('/data/ne_50m_admin_1.geojson');
-  const geojson = await response.json();
   const cfg = getDefaultProjectionConfig();
 
-  // Group features by country
-  const countryFeatures: Record<string, any[]> = {};
-  const countryMeta: Record<string, { name: string; continent: string; popEst: number }> = {};
+  // Load both datasets in parallel
+  const [admin0Resp, admin1Resp] = await Promise.all([
+    fetch('/data/world-land.geojson'),
+    fetch('/data/ne_110m_admin_1.geojson'),
+  ]);
+  const admin0 = await admin0Resp.json();
+  const admin1 = await admin1Resp.json();
 
-  for (const feature of geojson.features) {
+  // Parse US states from admin-1
+  const usStates: any[] = [];
+  for (const feature of (admin1.features || [])) {
     const props = feature.properties;
-    if (!props) continue;
-    const isoA3 = props.adm0_a3 || props.sov_a3;
-    if (!isoA3 || isoA3 === '-99') continue;
-
-    const countryId = isoToGameId(isoA3);
-    if (!countryFeatures[countryId]) {
-      countryFeatures[countryId] = [];
-      countryMeta[countryId] = {
-        name: props.admin || isoA3,
-        continent: '',
-        popEst: 0,
-      };
+    if (props?.adm0_a3 === 'USA') {
+      usStates.push(feature);
     }
-    countryFeatures[countryId].push(feature);
-  }
-
-  // Also load the admin-0 dataset for continent info and base map paths
-  let admin0Features: any[] = [];
-  try {
-    const resp0 = await fetch('/data/world-land.geojson');
-    const geo0 = await resp0.json();
-    admin0Features = geo0.features || [];
-  } catch (e) {
-    console.warn('[WorldGenerator] Could not load admin-0 dataset for continents');
-  }
-
-  // Build continent/population lookup from admin-0
-  const admin0Info: Record<string, { continent: string; popEst: number }> = {};
-  for (const f of admin0Features) {
-    const props = f.properties;
-    if (!props) continue;
-    const iso = props.adm0_a3 || props.iso_a3 || props.sov_a3;
-    if (!iso || iso === '-99') continue;
-    const cid = isoToGameId(iso);
-    admin0Info[cid] = {
-      continent: props.continent || 'Unknown',
-      popEst: props.pop_est || 1_000_000,
-    };
-  }
-
-  // Merge continent info
-  for (const cid of Object.keys(countryMeta)) {
-    if (admin0Info[cid]) {
-      countryMeta[cid].continent = admin0Info[cid].continent;
-      countryMeta[cid].popEst = admin0Info[cid].popEst;
-    }
-    if (!countryMeta[cid].continent) countryMeta[cid].continent = 'Unknown';
-    if (!countryMeta[cid].popEst) countryMeta[cid].popEst = 1_000_000;
   }
 
   const countries: Country[] = [];
@@ -183,89 +155,127 @@ export async function generateWorld(): Promise<WorldData> {
   const countryPaths: Record<string, string> = {};
   let colorIdx = 0;
 
-  for (const [countryId, features] of Object.entries(countryFeatures)) {
-    const meta = countryMeta[countryId];
+  // Skip USA from admin-0 (we'll use admin-1 states instead)
+  const skipCountryIds = new Set(['usa']);
+
+  for (const feature of admin0.features) {
+    const props = feature.properties;
+    if (!props) continue;
+    const iso = props.adm0_a3 || props.iso_a3 || props.sov_a3;
+    if (!iso || iso === '-99') continue;
+
+    const countryId = isoToGameId(iso);
+    if (skipCountryIds.has(countryId)) continue;
+
+    const countryName = props.name || props.admin || iso;
+    const continent = props.continent || 'Unknown';
+    const popEst = props.pop_est || 1_000_000;
     const override = COUNTRY_OVERRIDES[countryId];
 
     // Create country
-    const country = createCountry(countryId, meta.name, countryId.toUpperCase(), meta.continent, meta.popEst, override, colorIdx);
+    const country = createCountry(countryId, countryName, iso, continent, popEst, override, colorIdx);
     countries.push(country);
     colorIdx++;
 
-    // Create provinces from admin-1 features
+    // Create single province for this country
+    const svgPath = geometryToSvgPath(feature.geometry, cfg);
+    if (!svgPath) continue;
+
+    countryPaths[countryId] = svgPath;
+
+    const centroid = getCentroidFromGeometry(feature.geometry);
+    const terrain = inferTerrain(centroid.lat, centroid.lng);
+    const dev = 20 + Math.floor(Math.random() * 60);
+    const buildings: Building[] = [];
+    if (dev >= 30) buildings.push({ type: 'infrastructure', level: Math.min(3, Math.floor(dev / 25)) });
+    if (dev >= 50) buildings.push({ type: 'industry', level: Math.min(3, Math.floor(dev / 30)) });
+
+    provinces.push({
+      id: `${countryId}_main`,
+      countryId,
+      originalCountryId: countryId,
+      name: countryName,
+      population: popEst,
+      morale: 50 + Math.floor(Math.random() * 40),
+      stability: 40 + Math.floor(Math.random() * 40),
+      corruption: 5 + Math.floor(Math.random() * 30),
+      resourceProduction: {
+        food: terrain === 'plains' ? 30 : terrain === 'forest' ? 15 : 5,
+        oil: terrain === 'desert' ? 20 : Math.random() > 0.7 ? 10 : 0,
+        metal: terrain === 'mountain' ? 25 : Math.random() > 0.6 ? 10 : 0,
+        electronics: dev > 60 ? 15 : 0,
+        money: Math.floor(popEst / 100000) + dev * 2,
+      },
+      buildings,
+      terrain,
+      isCoastal: Math.random() < 0.5,
+      development: dev,
+      adjacentProvinces: [],
+      geometry: svgPath,
+    });
+  }
+
+  // Now add USA with admin-1 states
+  {
+    const override = COUNTRY_OVERRIDES['usa'];
+    const usCountry = createCountry('usa', 'United States', 'USA', 'North America', 331_000_000, override, colorIdx);
+    countries.push(usCountry);
+    colorIdx++;
+
     const allSvgParts: string[] = [];
-    let provIdx = 0;
-
-    for (const feature of features) {
+    for (const feature of usStates) {
       const props = feature.properties;
-      const provName = props.name || props.name_en || `Region ${provIdx + 1}`;
-      const lat = props.latitude || 0;
-      const lng = props.longitude || 0;
-      const terrain = inferTerrain(lat, lng);
-
-      // Build SVG path from geometry
-      const outerRings = extractRings(feature.geometry);
-      if (outerRings.length === 0) continue;
-
-      const svgParts: string[] = [];
-      for (const ring of outerRings) {
-        const path = ringToSvgPathProjected(ring, cfg);
-        if (path) {
-          svgParts.push(path);
-          allSvgParts.push(path);
-        }
-      }
-      const svgPath = svgParts.join(' ');
+      const stateName = props.name || props.name_en || 'Unknown State';
+      const svgPath = geometryToSvgPath(feature.geometry, cfg);
       if (!svgPath) continue;
+      allSvgParts.push(svgPath);
 
-      const provId = `${countryId}_${props.adm1_code || provIdx + 1}`;
-      const provPop = Math.max(10000, Math.round(meta.popEst / Math.max(features.length, 1)));
-      const isCoastal = props.type_en?.toLowerCase().includes('coast') || Math.random() < 0.3;
-
-      const dev = 20 + Math.floor(Math.random() * 60);
+      const centroid = getCentroidFromGeometry(feature.geometry);
+      const terrain = inferTerrain(centroid.lat, centroid.lng);
+      const provId = `usa_${(props.postal || props.adm1_code || stateName).toLowerCase().replace(/[^a-z0-9]/g, '')}`;
+      const statePop = Math.round(331_000_000 / Math.max(usStates.length, 1));
+      const dev = 40 + Math.floor(Math.random() * 50);
       const buildings: Building[] = [];
       if (dev >= 30) buildings.push({ type: 'infrastructure', level: Math.min(3, Math.floor(dev / 25)) });
       if (dev >= 50) buildings.push({ type: 'industry', level: Math.min(3, Math.floor(dev / 30)) });
 
       provinces.push({
         id: provId,
-        countryId,
-        originalCountryId: countryId,
-        name: provName,
-        population: provPop,
+        countryId: 'usa',
+        originalCountryId: 'usa',
+        name: stateName,
+        population: statePop,
         morale: 50 + Math.floor(Math.random() * 40),
-        stability: 40 + Math.floor(Math.random() * 40),
-        corruption: 5 + Math.floor(Math.random() * 30),
+        stability: 50 + Math.floor(Math.random() * 30),
+        corruption: 5 + Math.floor(Math.random() * 20),
         resourceProduction: {
           food: terrain === 'plains' ? 30 : terrain === 'forest' ? 15 : 5,
           oil: terrain === 'desert' ? 20 : Math.random() > 0.7 ? 10 : 0,
           metal: terrain === 'mountain' ? 25 : Math.random() > 0.6 ? 10 : 0,
           electronics: dev > 60 ? 15 : 0,
-          money: Math.floor(provPop / 100000) + dev * 2,
+          money: Math.floor(statePop / 100000) + dev * 2,
         },
         buildings,
         terrain,
-        isCoastal,
+        isCoastal: ['wa', 'or', 'ca', 'tx', 'fl', 'ny', 'ma', 'me', 'ct', 'nj', 'md', 'va', 'nc', 'sc', 'ga', 'al', 'ms', 'la', 'hi', 'ak'].includes((props.postal || '').toLowerCase()),
         development: dev,
         adjacentProvinces: [],
         geometry: svgPath,
       });
-      provIdx++;
     }
-
-    countryPaths[countryId] = allSvgParts.join(' ');
+    countryPaths['usa'] = allSvgParts.join(' ');
   }
 
-  // Compute adjacency using spatial hashing
+  // Compute adjacency
   computeAdjacency(provinces);
 
-  // Register geometries for centroid lookups
+  // Register geometries
   for (const prov of provinces) {
     updateProvinceGeometry(prov.id, prov.geometry);
   }
   invalidateCentroidCache();
 
-  console.log(`[WorldGenerator] Generated ${countries.length} countries, ${provinces.length} provinces (real ADM1 borders)`);
+  console.log(`[WorldGenerator] Generated ${countries.length} countries, ${provinces.length} provinces`);
 
   return { countries, provinces, countryPaths };
 }
@@ -277,10 +287,7 @@ function createCountry(
 ): Country {
   if (override) {
     return {
-      id,
-      name: override.name ?? name,
-      code,
-      continent,
+      id, name: override.name ?? name, code, continent,
       color: override.color ?? COLOR_PALETTE[colorIdx % COLOR_PALETTE.length],
       isPlayerControlled: false,
       population: override.population ?? population,
@@ -305,8 +312,7 @@ function createCountry(
   return {
     id, name, code, continent,
     color: COLOR_PALETTE[colorIdx % COLOR_PALETTE.length],
-    isPlayerControlled: false,
-    population,
+    isPlayerControlled: false, population,
     stability: 40 + Math.floor(Math.random() * 40),
     approval: 40 + Math.floor(Math.random() * 30),
     resources: {
