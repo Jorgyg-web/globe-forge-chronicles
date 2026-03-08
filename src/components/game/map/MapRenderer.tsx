@@ -34,9 +34,12 @@ const MapRenderer: React.FC<MapRendererProps> = ({ zoom, pan, isPanning, moveMod
       </defs>
       <rect width="800" height="450" fill="url(#gridPattern)" />
 
-      {/* Continent shapes */}
+      {/* Ocean / water base */}
+      <rect width="800" height="450" fill="hsl(var(--map-water))" opacity="0.15" />
+
+      {/* Continent land mass silhouettes (decorative background) */}
       {CONTINENT_PATHS.map((d, i) => (
-        <path key={i} d={d} fill="hsl(var(--map-land))" stroke="hsl(var(--map-border))" strokeWidth="0.5" opacity={0.25} />
+        <path key={i} d={d} fill="hsl(var(--map-land))" stroke="hsl(var(--map-border))" strokeWidth="0.3" opacity="0.12" />
       ))}
 
       <ProvinceLayer />
