@@ -1,4 +1,5 @@
 import { Province, Building, TerrainType, Resources, ProvinceId } from '@/types/game';
+import { PROVINCE_GEOMETRY } from './provinceGeometry';
 
 interface ProvinceDef {
   id: string; countryId: string; name: string;
@@ -10,13 +11,11 @@ interface ProvinceDef {
 
 function makeProvince(d: ProvinceDef): Province {
   const buildings: Building[] = [];
-  // Auto-generate basic buildings based on development
   if (d.dev >= 30) buildings.push({ type: 'infrastructure', level: Math.min(5, Math.floor(d.dev / 20)) });
   if (d.dev >= 40) buildings.push({ type: 'industry', level: Math.min(5, Math.floor(d.dev / 25)) });
   if (d.dev >= 50) buildings.push({ type: 'barracks', level: Math.min(3, Math.floor(d.dev / 35)) });
   if (d.dev >= 60) buildings.push({ type: 'resourceExtractor', level: Math.min(3, Math.floor(d.dev / 30)) });
 
-  // Add extra buildings from definition
   if (d.buildings) {
     for (const [type, level] of Object.entries(d.buildings)) {
       if (level && level > 0) {
@@ -48,6 +47,7 @@ function makeProvince(d: ProvinceDef): Province {
     isCoastal: d.isCoastal,
     development: d.dev,
     adjacentProvinces: d.adjacent,
+    geometry: PROVINCE_GEOMETRY[d.id] ?? `M400,225 L410,220 L420,225 L410,230 Z`,
   };
 }
 

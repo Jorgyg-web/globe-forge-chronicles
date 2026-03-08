@@ -85,6 +85,7 @@ export interface Province {
   isCoastal: boolean;
   development: number;
   adjacentProvinces: ProvinceId[];
+  geometry: string; // SVG path string for map rendering
 }
 
 export type TerrainType = 'plains' | 'forest' | 'mountain' | 'desert' | 'urban' | 'coastal' | 'arctic';
