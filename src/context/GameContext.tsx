@@ -45,6 +45,7 @@ function createInitialState(): GameState {
     events: [],
     speed: 'normal',
     paused: true,
+    constructionQueue: [],
   };
 }
 
