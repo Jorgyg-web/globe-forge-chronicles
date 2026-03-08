@@ -7,9 +7,9 @@ import EconomyPanel from '@/components/game/EconomyPanel';
 import MilitaryPanel from '@/components/game/MilitaryPanel';
 import DiplomacyPanel from '@/components/game/DiplomacyPanel';
 import TechnologyPanel from '@/components/game/TechnologyPanel';
-import InfrastructurePanel from '@/components/game/InfrastructurePanel';
 import ProvincePanel from '@/components/game/ProvincePanel';
 import ConstructionPanel from '@/components/game/ConstructionPanel';
+import ProductionPanel from '@/components/game/ProductionPanel';
 import EventLog from '@/components/game/EventLog';
 import { useMemo } from 'react';
 
@@ -24,8 +24,8 @@ const GameContent = () => {
       case 'military': return <MilitaryPanel />;
       case 'diplomacy': return <DiplomacyPanel />;
       case 'technology': return <TechnologyPanel />;
-      case 'infrastructure': return <InfrastructurePanel />;
       case 'construction': return <ConstructionPanel />;
+      case 'production': return <ProductionPanel />;
     }
   }, [activePanel]);
 
