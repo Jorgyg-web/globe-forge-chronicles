@@ -66,7 +66,7 @@ const ArmyLayer: React.FC = () => {
   return (
     <>
       {/* Movement arrows with ETA */}
-      {armyPositions.filter(a => a.targetX != null).map(({ army, x, y, targetX, targetY }) => {
+      {showMovement && armyPositions.filter(a => a.targetX != null).map(({ army, x, y, targetX, targetY }) => {
         if (!targetX || !targetY) return null;
         const isPlayer = army.countryId === state.playerCountryId;
         const cx = x + (targetX - x) * army.movementProgress;
