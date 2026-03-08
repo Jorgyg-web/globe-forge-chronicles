@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useCallback, useEffect, useRef } from 'react';
-import { GameState, GameAction, CountryId, ProvinceId } from '@/types/game';
+import { GameState, GameAction, CountryId, ProvinceId, ArmyId } from '@/types/game';
 import { processAction } from '@/engine/GameEngine';
 import { INITIAL_COUNTRIES, initializeDiplomacy } from '@/data/countries';
 import { INITIAL_PROVINCES } from '@/data/provinces';
@@ -11,6 +11,8 @@ interface GameContextType {
   setSelectedCountryId: (id: CountryId | null) => void;
   selectedProvinceId: ProvinceId | null;
   setSelectedProvinceId: (id: ProvinceId | null) => void;
+  selectedArmyId: ArmyId | null;
+  setSelectedArmyId: (id: ArmyId | null) => void;
   activePanel: PanelType;
   setActivePanel: (panel: PanelType) => void;
 }
@@ -44,6 +46,7 @@ function createInitialState(): GameState {
     paused: true,
     constructionQueue: [],
     productionQueue: [],
+    activeBattles: [],
   };
 }
 
@@ -55,6 +58,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(gameReducer, null, createInitialState);
   const [selectedCountryId, setSelectedCountryId] = React.useState<CountryId | null>('usa');
   const [selectedProvinceId, setSelectedProvinceId] = React.useState<ProvinceId | null>(null);
+  const [selectedArmyId, setSelectedArmyId] = React.useState<ArmyId | null>(null);
   const [activePanel, setActivePanel] = React.useState<PanelType>('overview');
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -76,6 +80,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       state, dispatch: wrappedDispatch,
       selectedCountryId, setSelectedCountryId,
       selectedProvinceId, setSelectedProvinceId,
+      selectedArmyId, setSelectedArmyId,
       activePanel, setActivePanel,
     }}>
       {children}

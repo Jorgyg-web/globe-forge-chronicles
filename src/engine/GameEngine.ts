@@ -25,6 +25,7 @@ export function processAction(state: GameState, action: GameAction): GameState {
     case 'CREATE_ARMY': return handleCreateArmy(state, action.provinceId, action.units, action.name);
     case 'MOVE_ARMY': return handleMoveArmy(state, action.armyId, action.targetProvinceId);
     case 'MERGE_ARMIES': return handleMergeArmies(state, action.armyIds);
+    case 'SPLIT_ARMY': return handleSplitArmy(state, action.armyId, action.units);
 
     case 'START_RESEARCH': return handleStartResearch(state, action.countryId, action.techId);
     case 'CANCEL_RESEARCH': return handleCancelResearch(state, action.countryId, action.techId);
@@ -60,6 +61,11 @@ function canAfford(have: Resources, cost: Resources): boolean {
   return RESOURCE_KEYS.every(k => have[k] >= cost[k]);
 }
 function uid(): string { return Math.random().toString(36).slice(2, 10); }
+
+// Terrain movement cost multiplier (higher = slower)
+const TERRAIN_MOVEMENT_COST: Record<string, number> = {
+  plains: 1, coastal: 1, urban: 0.8, forest: 1.4, desert: 1.3, mountain: 2, arctic: 1.8,
+};
 
 // ─── Building ───
 function handleBuild(state: GameState, provId: ProvinceId, buildingType: BuildingType): GameState {
@@ -104,9 +110,7 @@ function handleProduceUnits(state: GameState, provId: ProvinceId, unitType: Unit
   if (!country) return state;
 
   const stats = UNIT_STATS[unitType];
-  // Check province has required building
   if (!prov.buildings.some(b => b.type === stats.requiredBuilding)) return state;
-  // Check research
   if (stats.requiredResearch && !country.technology.researched.includes(stats.requiredResearch)) return state;
 
   const cost = scaleResources(stats.cost, quantity);
@@ -134,7 +138,6 @@ function handleCreateArmy(state: GameState, provId: ProvinceId, unitDefs: { type
   const prov = state.provinces[provId];
   if (!prov) return state;
 
-  // Pull units from garrison/completed production in province
   const armyId = `army_${uid()}`;
   const units: ArmyUnit[] = unitDefs.map(u => ({
     type: u.type, count: u.count, health: 100,
@@ -151,8 +154,7 @@ function handleCreateArmy(state: GameState, provId: ProvinceId, unitDefs: { type
 
 function handleMoveArmy(state: GameState, armyId: ArmyId, targetId: ProvinceId): GameState {
   const army = state.armies[armyId];
-  if (!army) return state;
-  // Check adjacency
+  if (!army || army.targetProvinceId) return state; // can't redirect mid-move
   const currentProv = state.provinces[army.provinceId];
   if (!currentProv?.adjacentProvinces.includes(targetId)) return state;
 
@@ -169,7 +171,7 @@ function handleMergeArmies(state: GameState, armyIds: ArmyId[]): GameState {
   if (armyIds.length < 2) return state;
   const armies = armyIds.map(id => state.armies[id]).filter(Boolean);
   if (armies.length < 2) return state;
-  if (!armies.every(a => a.provinceId === armies[0].provinceId)) return state;
+  if (!armies.every(a => a.provinceId === armies[0].provinceId && !a.targetProvinceId)) return state;
 
   const merged: ArmyUnit[] = [];
   for (const army of armies) {
@@ -195,8 +197,39 @@ function handleMergeArmies(state: GameState, armyIds: ArmyId[]): GameState {
   return { ...state, armies: newArmies };
 }
 
+function handleSplitArmy(state: GameState, armyId: ArmyId, splitUnits: { type: UnitType; count: number }[]): GameState {
+  const army = state.armies[armyId];
+  if (!army || army.targetProvinceId) return state;
+
+  // Validate counts
+  for (const su of splitUnits) {
+    const existing = army.units.find(u => u.type === su.type);
+    if (!existing || existing.count < su.count) return state;
+  }
+
+  // Remove from original
+  const remainingUnits = army.units.map(u => {
+    const split = splitUnits.find(s => s.type === u.type);
+    return split ? { ...u, count: u.count - split.count } : { ...u };
+  }).filter(u => u.count > 0);
+
+  const newId = `army_${uid()}`;
+  const newUnits: ArmyUnit[] = splitUnits.map(su => {
+    const orig = army.units.find(u => u.type === su.type)!;
+    return { type: su.type, count: su.count, health: orig.health, level: orig.level };
+  });
+
+  const newArmies = { ...state.armies };
+  newArmies[armyId] = { ...army, units: remainingUnits };
+  newArmies[newId] = {
+    id: newId, countryId: army.countryId, provinceId: army.provinceId,
+    targetProvinceId: null, movementProgress: 0, units: newUnits, name: `${army.name} (Split)`,
+  };
+
+  return { ...state, armies: newArmies };
+}
+
 function getUnitLevel(country: Country, _unitType: UnitType): number {
-  // Level based on number of researched techs
   return Math.min(5, Math.floor(country.technology.researched.length / 3) + 1);
 }
 
@@ -295,41 +328,66 @@ function processTurn(state: GameState): GameState {
   let s = { ...state };
   const events: GameEvent[] = [];
 
-  // Advance time
   s.turn += 1;
   s.month += 1;
   if (s.month > 12) { s.month = 1; s.year += 1; }
 
-  // 1. Calculate resource income for all countries
+  // 1. Resources
   s = processResourceIncome(s);
-
-  // 2. Process construction queue
+  // 2. Construction
   s = processConstructionQueue(s, events);
-
-  // 3. Process production queue
+  // 3. Production
   s = processProductionQueue(s, events);
-
-  // 4. Process research for all countries
+  // 4. Research
   s = processAllResearch(s, events);
-
-  // 5. Process army movement
+  // 5. Ranged attacks (artillery/missiles attack adjacent provinces)
+  s = processRangedCombat(s, events);
+  // 6. Army movement
   s = processArmyMovement(s, events);
-
-  // 6. Process combat
+  // 7. Combat (armies in same province)
   s = processCombat(s, events);
-
-  // 7. Process province morale
+  // 8. Province morale & rebellion
   s = processProvinceMorale(s);
-
-  // 8. AI decisions
+  // 9. AI
   for (const id of Object.keys(s.countries)) {
     if (id !== s.playerCountryId) {
       s = processAI(s, id, events);
     }
   }
 
+  // Track active battles for UI
+  s.activeBattles = findActiveBattles(s);
+
   s.events = [...s.events, ...events];
   return s;
+}
+
+// Find provinces where opposing armies are stationed (for visual indicators)
+function findActiveBattles(state: GameState): { provinceId: ProvinceId; attackerCountryId: CountryId; defenderCountryId: CountryId }[] {
+  const battles: { provinceId: ProvinceId; attackerCountryId: CountryId; defenderCountryId: CountryId }[] = [];
+  const armyByProvince: Record<ProvinceId, Army[]> = {};
+  for (const army of Object.values(state.armies)) {
+    if (!army.targetProvinceId) {
+      if (!armyByProvince[army.provinceId]) armyByProvince[army.provinceId] = [];
+      armyByProvince[army.provinceId].push(army);
+    }
+  }
+  for (const [provId, armies] of Object.entries(armyByProvince)) {
+    const countries = [...new Set(armies.map(a => a.countryId))];
+    if (countries.length < 2) continue;
+    for (let i = 0; i < countries.length; i++) {
+      for (let j = i + 1; j < countries.length; j++) {
+        const atWar = state.wars.some(w => w.active && (
+          (w.attackers.includes(countries[i]) && w.defenders.includes(countries[j])) ||
+          (w.attackers.includes(countries[j]) && w.defenders.includes(countries[i]))
+        ));
+        if (atWar) {
+          battles.push({ provinceId: provId, attackerCountryId: countries[i], defenderCountryId: countries[j] });
+        }
+      }
+    }
+  }
+  return battles;
 }
 
 function processResourceIncome(state: GameState): GameState {
@@ -349,6 +407,17 @@ function processResourceIncome(state: GameState): GameState {
       }
     }
 
+    // Army supply cost
+    const armies = Object.values(s.armies).filter(a => a.countryId === countryId);
+    let supplyCost = 0;
+    for (const army of armies) {
+      for (const u of army.units) {
+        supplyCost += UNIT_STATS[u.type].supplyUsage * u.count;
+      }
+    }
+    income.money -= supplyCost;
+    income.food -= Math.floor(supplyCost * 0.5);
+
     s = updateCountry(s, countryId, c => ({
       ...c,
       resources: addResources(c.resources, income),
@@ -365,7 +434,6 @@ function processConstructionQueue(state: GameState, events: GameEvent[]): GameSt
   for (const item of s.constructionQueue) {
     const updated = { ...item, turnsRemaining: item.turnsRemaining - 1 };
     if (updated.turnsRemaining <= 0) {
-      // Apply building
       s = updateProvince(s, item.provinceId, p => {
         const buildings = [...p.buildings];
         const existing = buildings.find(b => b.type === item.buildingType);
@@ -398,14 +466,11 @@ function processProductionQueue(state: GameState, events: GameEvent[]): GameStat
   for (const item of s.productionQueue) {
     const updated = { ...item, turnsRemaining: item.turnsRemaining - 1 };
     if (updated.turnsRemaining <= 0) {
-      // Spawn units as garrison army in province
-      const armyId = `army_${uid()}`;
       const country = s.countries[item.countryId];
       const newUnit: ArmyUnit = {
         type: item.unitType, count: item.quantity, health: 100,
         level: getUnitLevel(country, item.unitType),
       };
-      // Try to merge with existing army in province
       const existingArmy = Object.values(s.armies).find(
         a => a.countryId === item.countryId && a.provinceId === item.provinceId && !a.targetProvinceId
       );
@@ -418,6 +483,7 @@ function processProductionQueue(state: GameState, events: GameEvent[]): GameStat
         }
         s = { ...s, armies: { ...s.armies, [existingArmy.id]: { ...existingArmy } } };
       } else {
+        const armyId = `army_${uid()}`;
         const army: Army = {
           id: armyId, countryId: item.countryId, provinceId: item.provinceId,
           targetProvinceId: null, movementProgress: 0, units: [newUnit],
@@ -448,7 +514,6 @@ function processAllResearch(state: GameState, events: GameEvent[]): GameState {
     for (const p of provs) {
       rpPerTurn += (p.buildings.find(b => b.type === 'industry')?.level ?? 0) * 2;
     }
-    // Split RP among active research
     const country = s.countries[countryId];
     if (country.technology.activeResearch.length === 0) continue;
 
@@ -481,20 +546,117 @@ function processAllResearch(state: GameState, events: GameEvent[]): GameState {
   return s;
 }
 
-function processArmyMovement(state: GameState, _events: GameEvent[]): GameState {
+// ─── Ranged Combat (artillery, missiles, bombers attack adjacent provinces) ───
+function processRangedCombat(state: GameState, events: GameEvent[]): GameState {
+  let s = { ...state };
+
+  for (const army of Object.values(s.armies)) {
+    if (army.targetProvinceId) continue; // moving armies don't fire
+
+    const rangedUnits = army.units.filter(u => UNIT_STATS[u.type].range >= 2);
+    if (rangedUnits.length === 0) continue;
+
+    const currentProv = s.provinces[army.provinceId];
+    if (!currentProv) continue;
+
+    // Find enemy armies in adjacent provinces
+    for (const adjId of currentProv.adjacentProvinces) {
+      const adjProv = s.provinces[adjId];
+      if (!adjProv) continue;
+
+      const enemyArmies = Object.values(s.armies).filter(
+        a => a.provinceId === adjId && !a.targetProvinceId && a.countryId !== army.countryId
+      );
+      if (enemyArmies.length === 0) continue;
+
+      // Check at war
+      const atWar = s.wars.some(w => w.active && (
+        (w.attackers.includes(army.countryId) && w.defenders.some(d => enemyArmies.some(e => e.countryId === d))) ||
+        (w.defenders.includes(army.countryId) && w.attackers.some(a2 => enemyArmies.some(e => e.countryId === a2)))
+      ));
+      if (!atWar) continue;
+
+      // Calculate ranged damage (reduced compared to direct combat)
+      let totalRangedDamage = 0;
+      for (const u of rangedUnits) {
+        const stats = UNIT_STATS[u.type];
+        totalRangedDamage += stats.attack * u.count * (u.health / 100) * 0.3; // 30% of full attack for bombardment
+      }
+
+      // Apply damage to enemy armies (spread across units)
+      for (const enemy of enemyArmies) {
+        const totalEnemyUnits = enemy.units.reduce((s2, u) => s2 + u.count, 0);
+        if (totalEnemyUnits === 0) continue;
+
+        const damagePerUnit = totalRangedDamage / totalEnemyUnits;
+        const lossRate = Math.min(0.1, damagePerUnit / 100); // Cap at 10% losses per bombardment
+
+        const updatedUnits = enemy.units.map(u => {
+          const lost = Math.max(0, Math.floor(u.count * lossRate));
+          return { ...u, count: u.count - lost, health: Math.max(20, u.health - 3) };
+        }).filter(u => u.count > 0);
+
+        s = { ...s, armies: { ...s.armies, [enemy.id]: { ...enemy, units: updatedUnits } } };
+      }
+
+      events.push({
+        id: `evt_${uid()}`, turn: s.turn, type: 'military',
+        title: 'Bombardment',
+        description: `${s.countries[army.countryId]?.name} bombards forces in ${adjProv.name}`,
+        countryId: army.countryId,
+      });
+      break; // One bombardment target per army per turn
+    }
+  }
+
+  // Clean empty armies
+  const cleanArmies: Record<ArmyId, Army> = {};
+  for (const [id, army] of Object.entries(s.armies)) {
+    if (army.units.reduce((sum, u) => sum + u.count, 0) > 0) cleanArmies[id] = army;
+  }
+  s.armies = cleanArmies;
+
+  return s;
+}
+
+function processArmyMovement(state: GameState, events: GameEvent[]): GameState {
   let s = { ...state };
   const newArmies = { ...s.armies };
 
   for (const army of Object.values(newArmies)) {
     if (!army.targetProvinceId) continue;
 
-    // Speed based on fastest unit speed
-    const maxSpeed = Math.min(...army.units.map(u => UNIT_STATS[u.type].speed));
-    const infraBonus = 1 + (s.provinces[army.provinceId]?.buildings.find(b => b.type === 'infrastructure')?.level ?? 0) * 0.1;
-    const progress = army.movementProgress + (maxSpeed * infraBonus * 0.5);
+    // Speed = slowest unit in stack
+    const minSpeed = Math.min(...army.units.map(u => UNIT_STATS[u.type].speed));
+    const infraLevel = s.provinces[army.provinceId]?.buildings.find(b => b.type === 'infrastructure')?.level ?? 0;
+    const infraBonus = 1 + infraLevel * 0.15;
+    const targetProv = s.provinces[army.targetProvinceId];
+    const terrainCost = targetProv ? (TERRAIN_MOVEMENT_COST[targetProv.terrain] ?? 1) : 1;
+
+    const moveSpeed = (minSpeed * infraBonus) / terrainCost;
+    const progress = army.movementProgress + moveSpeed * 0.4;
 
     if (progress >= 1) {
+      // Arrive at destination
       newArmies[army.id] = { ...army, provinceId: army.targetProvinceId, targetProvinceId: null, movementProgress: 0 };
+
+      // If entering enemy province, auto-declare combat context
+      const destProv = s.provinces[army.targetProvinceId];
+      if (destProv && destProv.countryId !== army.countryId) {
+        // Check if at war with province owner
+        const atWar = s.wars.some(w => w.active && (
+          (w.attackers.includes(army.countryId) && w.defenders.includes(destProv.countryId)) ||
+          (w.defenders.includes(army.countryId) && w.attackers.includes(destProv.countryId))
+        ));
+        if (atWar) {
+          events.push({
+            id: `evt_${uid()}`, turn: s.turn, type: 'military',
+            title: 'Army Invasion',
+            description: `${s.countries[army.countryId]?.name} forces entered ${destProv.name}`,
+            countryId: army.countryId,
+          });
+        }
+      }
     } else {
       newArmies[army.id] = { ...army, movementProgress: progress };
     }
@@ -506,10 +668,9 @@ function processArmyMovement(state: GameState, _events: GameEvent[]): GameState 
 function processCombat(state: GameState, events: GameEvent[]): GameState {
   let s = { ...state };
 
-  // Find provinces where enemy armies coexist
   const armyByProvince: Record<ProvinceId, Army[]> = {};
   for (const army of Object.values(s.armies)) {
-    if (!army.targetProvinceId) { // only stationary armies fight
+    if (!army.targetProvinceId) {
       if (!armyByProvince[army.provinceId]) armyByProvince[army.provinceId] = [];
       armyByProvince[army.provinceId].push(army);
     }
@@ -518,7 +679,6 @@ function processCombat(state: GameState, events: GameEvent[]): GameState {
   for (const [provId, armies] of Object.entries(armyByProvince)) {
     if (armies.length < 2) continue;
 
-    // Group by country
     const byCountry: Record<CountryId, Army[]> = {};
     for (const a of armies) {
       if (!byCountry[a.countryId]) byCountry[a.countryId] = [];
@@ -527,7 +687,6 @@ function processCombat(state: GameState, events: GameEvent[]): GameState {
     const countryIds = Object.keys(byCountry);
     if (countryIds.length < 2) continue;
 
-    // Check if any pair is at war
     for (let i = 0; i < countryIds.length; i++) {
       for (let j = i + 1; j < countryIds.length; j++) {
         const c1 = countryIds[i], c2 = countryIds[j];
@@ -537,19 +696,14 @@ function processCombat(state: GameState, events: GameEvent[]): GameState {
         ));
         if (!atWar) continue;
 
-        // Determine attacker (army that moved into province owned by other)
         const prov = s.provinces[provId];
         const attackerCountry = prov.countryId === c1 ? c2 : c1;
         const defenderCountry = prov.countryId === c1 ? c1 : c2;
 
-        const attackerArmies = byCountry[attackerCountry];
-        const defenderArmies = byCountry[defenderCountry];
+        const report = resolveBattle(s, provId, attackerCountry, defenderCountry, byCountry[attackerCountry], byCountry[defenderCountry]);
 
-        const report = resolveBattle(s, provId, attackerCountry, defenderCountry, attackerArmies, defenderArmies);
-
-        // Apply losses
-        s = applyBattleLosses(s, attackerArmies, report.attackerLosses);
-        s = applyBattleLosses(s, defenderArmies, report.defenderLosses);
+        s = applyBattleLosses(s, byCountry[attackerCountry], report.attackerLosses);
+        s = applyBattleLosses(s, byCountry[defenderCountry], report.defenderLosses);
 
         // Province capture
         if (report.winner === 'attacker' && report.provinceCaptured) {
@@ -559,9 +713,21 @@ function processCombat(state: GameState, events: GameEvent[]): GameState {
             morale: Math.max(10, p.morale - 40),
             stability: Math.max(10, p.stability - 30),
           }));
+          // Morale hit to defender country
+          s = updateCountry(s, defenderCountry, c => ({
+            ...c,
+            stability: Math.max(5, c.stability - 3),
+            militaryMorale: Math.max(5, c.militaryMorale - 5),
+          }));
+
+          events.push({
+            id: `evt_${uid()}`, turn: s.turn, type: 'conquest',
+            title: `${prov.name} Captured!`,
+            description: `${s.countries[attackerCountry]?.name} seized ${prov.name} from ${s.countries[defenderCountry]?.name}`,
+            countryId: attackerCountry,
+          });
         }
 
-        // Add to war battles
         s = {
           ...s,
           wars: s.wars.map(w => {
@@ -572,11 +738,13 @@ function processCombat(state: GameState, events: GameEvent[]): GameState {
           }),
         };
 
-        events.push({
-          id: `evt_${uid()}`, turn: s.turn, type: 'war',
-          title: report.provinceCaptured ? `${prov.name} Captured!` : 'Battle Report',
-          description: report.description,
-        });
+        if (!report.provinceCaptured) {
+          events.push({
+            id: `evt_${uid()}`, turn: s.turn, type: 'war',
+            title: 'Battle Report',
+            description: report.description,
+          });
+        }
       }
     }
   }
@@ -584,8 +752,7 @@ function processCombat(state: GameState, events: GameEvent[]): GameState {
   // Remove empty armies
   const cleanArmies: Record<ArmyId, Army> = {};
   for (const [id, army] of Object.entries(s.armies)) {
-    const totalUnits = army.units.reduce((sum, u) => sum + u.count, 0);
-    if (totalUnits > 0) cleanArmies[id] = army;
+    if (army.units.reduce((sum, u) => sum + u.count, 0) > 0) cleanArmies[id] = army;
   }
   s.armies = cleanArmies;
 
@@ -604,73 +771,97 @@ function resolveBattle(
   const bunkerLevel = prov.buildings.find(b => b.type === 'bunker')?.level ?? 0;
   const aaLevel = prov.buildings.find(b => b.type === 'antiAirDefense')?.level ?? 0;
 
-  // Calculate total power
-  let attackPower = 0, defendPower = 0;
   const allAttackUnits: ArmyUnit[] = attackerArmies.flatMap(a => a.units);
   const allDefendUnits: ArmyUnit[] = defenderArmies.flatMap(a => a.units);
 
+  const attackerMorale = state.countries[attackerCountry]?.militaryMorale ?? 50;
+  const defenderMorale = state.countries[defenderCountry]?.militaryMorale ?? 50;
+
+  // Calculate effective power with diminishing returns per unit type
+  let attackPower = 0;
+  const attackerByType: Record<string, number> = {};
+  for (const u of allAttackUnits) {
+    attackerByType[u.type] = (attackerByType[u.type] ?? 0) + u.count;
+  }
+
   for (const u of allAttackUnits) {
     const stats = UNIT_STATS[u.type];
-    let effectiveness = stats.attack * u.count * (u.health / 100) * (u.level * 0.1 + 0.9);
-    // Strong vs bonus
+    const totalOfType = attackerByType[u.type];
+    // Diminishing returns: first 20 units full power, then logarithmic scaling
+    const effectiveCount = totalOfType <= 20 ? u.count : u.count * (20 + Math.log2(totalOfType - 19) * 5) / totalOfType;
+    let effectiveness = stats.attack * effectiveCount * (u.health / 100) * (u.level * 0.1 + 0.9);
+
+    // Counter bonus
     for (const du of allDefendUnits) {
       if (stats.strongVs.includes(UNIT_STATS[du.type].armorClass)) {
-        effectiveness *= 1.3;
+        effectiveness *= 1.35;
+        break;
+      }
+      if (stats.weakVs.includes(UNIT_STATS[du.type].armorClass)) {
+        effectiveness *= 0.7;
         break;
       }
     }
+
     attackPower += effectiveness;
+  }
+  attackPower *= (0.8 + attackerMorale / 500); // morale factor
+
+  let defendPower = 0;
+  const defenderByType: Record<string, number> = {};
+  for (const u of allDefendUnits) {
+    defenderByType[u.type] = (defenderByType[u.type] ?? 0) + u.count;
   }
 
   for (const u of allDefendUnits) {
     const stats = UNIT_STATS[u.type];
-    let effectiveness = (stats.attack + stats.defense) * u.count * (u.health / 100) * (u.level * 0.1 + 0.9);
-    // Strong vs bonus
+    const totalOfType = defenderByType[u.type];
+    const effectiveCount = totalOfType <= 20 ? u.count : u.count * (20 + Math.log2(totalOfType - 19) * 5) / totalOfType;
+    let effectiveness = (stats.attack + stats.defense) * effectiveCount * (u.health / 100) * (u.level * 0.1 + 0.9);
+
     for (const au of allAttackUnits) {
       if (stats.strongVs.includes(UNIT_STATS[au.type].armorClass)) {
-        effectiveness *= 1.3;
+        effectiveness *= 1.35;
+        break;
+      }
+      if (stats.weakVs.includes(UNIT_STATS[au.type].armorClass)) {
+        effectiveness *= 0.7;
         break;
       }
     }
-    // Terrain + fortification bonus for defender
-    effectiveness *= (1 + terrainBonus + fortLevel * 0.1 + bunkerLevel * 0.08);
+
+    effectiveness *= (1 + terrainBonus + fortLevel * 0.12 + bunkerLevel * 0.08);
     defendPower += effectiveness;
   }
+  defendPower *= (0.8 + defenderMorale / 500);
 
-  // Anti-air reduces air unit effectiveness
+  // Anti-air reduces air power
   if (aaLevel > 0) {
     for (const u of allAttackUnits) {
       if (UNIT_STATS[u.type].armorClass === 'aircraft') {
-        attackPower -= UNIT_STATS[u.type].attack * u.count * 0.1 * aaLevel;
+        attackPower -= UNIT_STATS[u.type].attack * u.count * 0.12 * aaLevel;
       }
     }
   }
 
-  // Diminishing returns for stacking
-  const attackerStackPenalty = Math.min(1, 10 / Math.max(1, allAttackUnits.reduce((s, u) => s + u.count, 0) / 50));
-  const defenderStackPenalty = Math.min(1, 10 / Math.max(1, allDefendUnits.reduce((s, u) => s + u.count, 0) / 50));
-  attackPower *= (0.7 + 0.3 * attackerStackPenalty);
-  defendPower *= (0.7 + 0.3 * defenderStackPenalty);
-
-  const total = attackPower + defendPower;
+  const total = Math.max(1, attackPower + defendPower);
+  // Battle cycle: ~15% casualties per tick
   const attackerLossRate = (defendPower / total) * 0.15;
   const defenderLossRate = (attackPower / total) * 0.15;
 
   const attackerLosses: Partial<Record<UnitType, number>> = {};
   for (const u of allAttackUnits) {
-    const lost = Math.floor(u.count * attackerLossRate * (0.5 + Math.random() * 0.5));
+    const lost = Math.floor(u.count * attackerLossRate * (0.6 + Math.random() * 0.4));
     if (lost > 0) attackerLosses[u.type] = (attackerLosses[u.type] ?? 0) + lost;
   }
   const defenderLosses: Partial<Record<UnitType, number>> = {};
   for (const u of allDefendUnits) {
-    const lost = Math.floor(u.count * defenderLossRate * (0.5 + Math.random() * 0.5));
+    const lost = Math.floor(u.count * defenderLossRate * (0.6 + Math.random() * 0.4));
     if (lost > 0) defenderLosses[u.type] = (defenderLosses[u.type] ?? 0) + lost;
   }
 
   const winner = attackPower > defendPower * 1.1 ? 'attacker' : defendPower > attackPower * 1.1 ? 'defender' : 'draw';
-
-  // Province captured if attacker wins AND defender has very few units left
-  const defenderRemaining = allDefendUnits.reduce((s, u) => s + u.count, 0) - Object.values(defenderLosses).reduce((s, v) => s + v, 0);
+  const defenderRemaining = allDefendUnits.reduce((s2, u) => s2 + u.count, 0) - Object.values(defenderLosses).reduce((s2, v) => s2 + v, 0);
   const provinceCaptured = winner === 'attacker' && defenderRemaining <= 0;
 
   const atkName = state.countries[attackerCountry].name;
@@ -693,7 +884,7 @@ function applyBattleLosses(state: GameState, armies: Army[], losses: Partial<Rec
   for (const army of armies) {
     const updatedUnits = army.units.map(u => {
       const lost = losses[u.type] ?? 0;
-      return { ...u, count: Math.max(0, u.count - lost), health: Math.max(10, u.health - 10) };
+      return { ...u, count: Math.max(0, u.count - lost), health: Math.max(10, u.health - 8) };
     }).filter(u => u.count > 0);
     newArmies[army.id] = { ...army, units: updatedUnits };
   }
@@ -707,14 +898,23 @@ function processProvinceMorale(state: GameState): GameState {
   for (const provId of Object.keys(s.provinces)) {
     s = updateProvince(s, provId, p => {
       let morale = p.morale;
-      // Conquered provinces slowly recover morale
+
       if (p.countryId !== p.originalCountryId) {
-        morale = Math.max(10, morale - 0.5); // resistance
+        // Conquered: slow recovery, garrison helps
+        const garrison = Object.values(s.armies).filter(a => a.countryId === p.countryId && a.provinceId === provId && !a.targetProvinceId);
+        const garrisonSize = garrison.reduce((sum, a) => sum + a.units.reduce((s2, u) => s2 + u.count, 0), 0);
+        const garrisonBonus = Math.min(0.5, garrisonSize * 0.02);
+        morale = morale + garrisonBonus - 0.3; // Net: garrison helps offset resistance
+        // Rebellion risk at very low morale
+        if (morale < 20 && Math.random() < 0.02) {
+          morale = Math.max(5, morale - 10);
+        }
       } else {
-        morale = Math.min(100, morale + 0.3); // natural recovery
+        morale = Math.min(100, morale + 0.5);
       }
-      // Corruption reduces morale
-      if (p.corruption > 30) morale = Math.max(10, morale - 0.2);
+
+      if (p.corruption > 30) morale = Math.max(5, morale - 0.2);
+
       return { ...p, morale: Math.max(0, Math.min(100, morale)) };
     });
   }
@@ -743,7 +943,7 @@ function processAI(state: GameState, countryId: CountryId, events: GameEvent[]):
   // Build barracks in provinces that don't have them
   if (s.turn % 3 === 0) {
     for (const prov of provs) {
-      if (!prov.buildings.some(b => b.type === 'barracks') && canAfford(country.resources, scaleResources(BUILDING_INFO.barracks.baseCost, 1))) {
+      if (!prov.buildings.some(b => b.type === 'barracks') && canAfford(s.countries[countryId].resources, scaleResources(BUILDING_INFO.barracks.baseCost, 1))) {
         s = processAction(s, { type: 'BUILD_IN_PROVINCE', provinceId: prov.id, buildingType: 'barracks' });
         break;
       }
@@ -756,6 +956,47 @@ function processAI(state: GameState, countryId: CountryId, events: GameEvent[]):
       if (prov.buildings.some(b => b.type === 'barracks') && canAfford(s.countries[countryId].resources, scaleResources(UNIT_STATS.infantry.cost, 5))) {
         s = processAction(s, { type: 'PRODUCE_UNITS', provinceId: prov.id, unitType: 'infantry', quantity: 5 });
         break;
+      }
+    }
+  }
+
+  // AI army movement: move idle armies towards borders/enemy provinces during war
+  if (s.turn % 2 === 0) {
+    const myArmies = Object.values(s.armies).filter(a => a.countryId === countryId && !a.targetProvinceId);
+    const activeWars = s.wars.filter(w => w.active && (w.attackers.includes(countryId) || w.defenders.includes(countryId)));
+
+    if (activeWars.length > 0 && myArmies.length > 0) {
+      const enemyIds = new Set<string>();
+      for (const w of activeWars) {
+        (w.attackers.includes(countryId) ? w.defenders : w.attackers).forEach(id => enemyIds.add(id));
+      }
+
+      for (const army of myArmies.slice(0, 2)) {
+        const currentProv = s.provinces[army.provinceId];
+        if (!currentProv) continue;
+
+        // Find adjacent province that's closer to enemy
+        const adjacentEnemyProv = currentProv.adjacentProvinces.find(adjId => {
+          const adj = s.provinces[adjId];
+          return adj && enemyIds.has(adj.countryId);
+        });
+
+        if (adjacentEnemyProv) {
+          s = processAction(s, { type: 'MOVE_ARMY', armyId: army.id, targetProvinceId: adjacentEnemyProv });
+        } else {
+          // Move towards border
+          const borderProv = currentProv.adjacentProvinces.find(adjId => {
+            const adj = s.provinces[adjId];
+            if (!adj || adj.countryId !== countryId) return false;
+            return adj.adjacentProvinces.some(a2 => {
+              const p2 = s.provinces[a2];
+              return p2 && enemyIds.has(p2.countryId);
+            });
+          });
+          if (borderProv) {
+            s = processAction(s, { type: 'MOVE_ARMY', armyId: army.id, targetProvinceId: borderProv });
+          }
+        }
       }
     }
   }
