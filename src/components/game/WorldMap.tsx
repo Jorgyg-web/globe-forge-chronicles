@@ -2,7 +2,8 @@ import { useGame } from '@/context/GameContext';
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 import { getProvincesForCountry } from '@/data/provinces';
-import { Province, Army } from '@/types/game';
+import { Province, Army, TerrainType } from '@/types/game';
+import { UNIT_STATS } from '@/data/unitStats';
 
 const COUNTRY_POSITIONS: Record<string, { x: number; y: number; w: number; h: number }> = {
   usa: { x: 80, y: 140, w: 120, h: 60 },
@@ -27,6 +28,27 @@ const COUNTRY_POSITIONS: Record<string, { x: number; y: number; w: number; h: nu
   aus: { x: 620, y: 330, w: 90, h: 60 },
 };
 
+// Terrain-based fill colors (HSL values matching design tokens)
+const TERRAIN_COLORS: Record<TerrainType, string> = {
+  plains: 'hsl(90, 20%, 28%)',
+  forest: 'hsl(140, 25%, 22%)',
+  mountain: 'hsl(30, 15%, 32%)',
+  desert: 'hsl(40, 35%, 35%)',
+  urban: 'hsl(220, 15%, 30%)',
+  coastal: 'hsl(195, 30%, 30%)',
+  arctic: 'hsl(200, 15%, 40%)',
+};
+
+const TERRAIN_PATTERNS: Record<TerrainType, string> = {
+  plains: '···',
+  forest: '🌲',
+  mountain: '⛰',
+  desert: '🏜',
+  urban: '🏙',
+  coastal: '🌊',
+  arctic: '❄',
+};
+
 function getProvinceLayout(provinces: Province[], pos: { x: number; y: number; w: number; h: number }) {
   const count = provinces.length;
   if (count === 0) return [];
@@ -44,7 +66,8 @@ function getProvinceLayout(provinces: Province[], pos: { x: number; y: number; w
 }
 
 const WorldMap = () => {
-  const { state, selectedCountryId, setSelectedCountryId, selectedProvinceId, setSelectedProvinceId, setActivePanel } = useGame();
+  const { state, selectedCountryId, setSelectedCountryId, selectedProvinceId, setSelectedProvinceId,
+    selectedArmyId, setSelectedArmyId, setActivePanel, dispatch } = useGame();
   const [hoveredCountry, setHoveredCountry] = useState<string | null>(null);
   const [hoveredProvince, setHoveredProvince] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
@@ -53,12 +76,14 @@ const WorldMap = () => {
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const containerRef = useRef<HTMLDivElement>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [moveMode, setMoveMode] = useState(false); // army move mode
 
-  const showProvinces = zoom >= 1.8;
+  const showProvinces = zoom >= 1.4;
+  const showDetails = zoom >= 2.2;
 
   const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
-    setZoom(prev => Math.min(4, Math.max(0.5, prev + (e.deltaY > 0 ? -0.1 : 0.1))));
+    setZoom(prev => Math.min(5, Math.max(0.5, prev + (e.deltaY > 0 ? -0.15 : 0.15))));
   }, []);
 
   useEffect(() => {
@@ -66,13 +91,26 @@ const WorldMap = () => {
     if (el) { el.addEventListener('wheel', handleWheel, { passive: false }); return () => el.removeEventListener('wheel', handleWheel); }
   }, [handleWheel]);
 
-  const handleMouseDown = (e: React.MouseEvent) => { if (e.button === 0) { setIsPanning(true); setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y }); } };
+  const handleMouseDown = (e: React.MouseEvent) => { if (e.button === 0 && !moveMode) { setIsPanning(true); setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y }); } };
   const handleMouseMove = (e: React.MouseEvent) => { setMousePos({ x: e.clientX, y: e.clientY }); if (isPanning) setPan({ x: e.clientX - panStart.x, y: e.clientY - panStart.y }); };
   const handleMouseUp = () => setIsPanning(false);
   const resetView = () => { setZoom(1); setPan({ x: 0, y: 0 }); };
 
   const handleProvinceClick = (provId: string, countryId: string) => {
-    setSelectedCountryId(countryId); setSelectedProvinceId(provId); setActivePanel('province');
+    if (moveMode && selectedArmyId) {
+      // Move army to this province
+      dispatch({ type: 'MOVE_ARMY', armyId: selectedArmyId, targetProvinceId: provId });
+      setMoveMode(false);
+      return;
+    }
+    setSelectedCountryId(countryId);
+    setSelectedProvinceId(provId);
+    setActivePanel('province');
+  };
+
+  const handleArmyClick = (armyId: string) => {
+    setSelectedArmyId(armyId);
+    setActivePanel('military');
   };
 
   const provinceLayouts = useMemo(() => {
@@ -86,24 +124,65 @@ const WorldMap = () => {
     return layouts;
   }, [state.countries, state.provinces]);
 
-  // Armies on map
+  // Army positions on map
   const armyPositions = useMemo(() => {
-    const positions: { army: Army; x: number; y: number }[] = [];
+    const positions: { army: Army; x: number; y: number; targetX?: number; targetY?: number }[] = [];
     for (const army of Object.values(state.armies)) {
       const prov = state.provinces[army.provinceId];
       if (!prov) continue;
-      const countryPos = COUNTRY_POSITIONS[prov.countryId];
-      if (!countryPos) continue;
-      const layout = provinceLayouts[prov.countryId];
-      const provLayout = layout?.find(l => l.province.id === prov.id);
-      if (provLayout) {
-        positions.push({ army, x: provLayout.x + provLayout.w / 2, y: provLayout.y + provLayout.h / 2 });
-      } else {
-        positions.push({ army, x: countryPos.x + countryPos.w / 2, y: countryPos.y + countryPos.h / 2 });
+
+      // Find position from province layout
+      let x = 0, y = 0;
+      for (const [cId, layout] of Object.entries(provinceLayouts)) {
+        const pl = layout.find(l => l.province.id === prov.id);
+        if (pl) { x = pl.x + pl.w / 2; y = pl.y + pl.h / 2; break; }
       }
+      if (x === 0) {
+        const countryPos = COUNTRY_POSITIONS[prov.countryId];
+        if (countryPos) { x = countryPos.x + countryPos.w / 2; y = countryPos.y + countryPos.h / 2; }
+      }
+
+      // Target position for movement arrow
+      let targetX: number | undefined, targetY: number | undefined;
+      if (army.targetProvinceId) {
+        const targetProv = state.provinces[army.targetProvinceId];
+        if (targetProv) {
+          for (const [, layout] of Object.entries(provinceLayouts)) {
+            const tl = layout.find(l => l.province.id === targetProv.id);
+            if (tl) { targetX = tl.x + tl.w / 2; targetY = tl.y + tl.h / 2; break; }
+          }
+          if (!targetX) {
+            const tp = COUNTRY_POSITIONS[targetProv.countryId];
+            if (tp) { targetX = tp.x + tp.w / 2; targetY = tp.y + tp.h / 2; }
+          }
+        }
+      }
+
+      positions.push({ army, x, y, targetX, targetY });
     }
     return positions;
   }, [state.armies, state.provinces, provinceLayouts]);
+
+  // Battle indicators
+  const battlePositions = useMemo(() => {
+    return (state.activeBattles ?? []).map(b => {
+      let x = 0, y = 0;
+      for (const [, layout] of Object.entries(provinceLayouts)) {
+        const pl = layout.find(l => l.province.id === b.provinceId);
+        if (pl) { x = pl.x + pl.w / 2; y = pl.y + pl.h / 2; break; }
+      }
+      return { ...b, x, y };
+    }).filter(b => b.x > 0);
+  }, [state.activeBattles, provinceLayouts]);
+
+  // Adjacent provinces for army movement highlight
+  const moveTargets = useMemo(() => {
+    if (!moveMode || !selectedArmyId) return new Set<string>();
+    const army = state.armies[selectedArmyId];
+    if (!army) return new Set<string>();
+    const prov = state.provinces[army.provinceId];
+    return new Set(prov?.adjacentProvinces ?? []);
+  }, [moveMode, selectedArmyId, state.armies, state.provinces]);
 
   const hoveredData = hoveredCountry ? state.countries[hoveredCountry] : null;
   const hoveredProvData = hoveredProvince ? state.provinces[hoveredProvince] : null;
@@ -114,14 +193,29 @@ const WorldMap = () => {
       onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}>
       <div className="absolute inset-0 pointer-events-none z-10" style={{ background: 'radial-gradient(ellipse at center, transparent 50%, hsl(var(--background) / 0.4) 100%)' }} />
 
+      {/* Move mode indicator */}
+      {moveMode && (
+        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 px-4 py-2 rounded-lg bg-primary/90 text-primary-foreground text-xs font-mono font-semibold flex items-center gap-2 animate-pulse">
+          🎯 SELECT TARGET PROVINCE
+          <button onClick={() => setMoveMode(false)} className="ml-2 px-2 py-0.5 bg-primary-foreground/20 rounded text-[10px]">Cancel</button>
+        </div>
+      )}
+
       <svg viewBox="0 0 800 450" className="w-full h-full" preserveAspectRatio="xMidYMid meet"
-        style={{ transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px)`, transition: isPanning ? 'none' : 'transform 0.2s ease-out', cursor: isPanning ? 'grabbing' : 'grab' }}>
+        style={{ transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px)`, transition: isPanning ? 'none' : 'transform 0.15s ease-out', cursor: moveMode ? 'crosshair' : isPanning ? 'grabbing' : 'grab' }}>
         <defs>
           <filter id="glow"><feGaussianBlur stdDeviation="3" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
+          <filter id="battleGlow"><feGaussianBlur stdDeviation="4" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
           <pattern id="gridPattern" width="25" height="25" patternUnits="userSpaceOnUse">
             <line x1="25" y1="0" x2="25" y2="25" stroke="hsl(225, 18%, 16%)" strokeWidth="0.3" opacity="0.2" />
             <line x1="0" y1="25" x2="25" y2="25" stroke="hsl(225, 18%, 16%)" strokeWidth="0.3" opacity="0.2" />
           </pattern>
+          <marker id="arrowhead" markerWidth="6" markerHeight="4" refX="5" refY="2" orient="auto">
+            <polygon points="0 0, 6 2, 0 4" fill="hsl(42, 100%, 58%)" opacity="0.8" />
+          </marker>
+          <marker id="arrowheadRed" markerWidth="6" markerHeight="4" refX="5" refY="2" orient="auto">
+            <polygon points="0 0, 6 2, 0 4" fill="hsl(0, 72%, 51%)" opacity="0.8" />
+          </marker>
         </defs>
         <rect width="800" height="450" fill="url(#gridPattern)" />
 
@@ -133,7 +227,7 @@ const WorldMap = () => {
         <path d="M470,40 L720,30 L730,160 L700,200 L620,220 L540,260 L490,230 L470,170 Z" fill="hsl(var(--map-land))" stroke="hsl(var(--map-border))" strokeWidth="0.5" opacity={0.25} />
         <path d="M610,310 L720,300 L730,370 L680,400 L620,390 Z" fill="hsl(var(--map-land))" stroke="hsl(var(--map-border))" strokeWidth="0.5" opacity={0.25} />
 
-        {/* Countries */}
+        {/* Countries & Provinces */}
         {Object.values(state.countries).map(country => {
           const pos = COUNTRY_POSITIONS[country.id];
           if (!pos) return null;
@@ -149,32 +243,93 @@ const WorldMap = () => {
 
               {showProvinces && layout ? (
                 <>
-                  <rect x={pos.x} y={pos.y} width={pos.w} height={pos.h} rx={4} fill={country.color} opacity={0.15}
-                    stroke={isSelected ? 'hsl(var(--primary))' : isAtWar ? 'hsl(var(--danger))' : 'hsl(var(--map-border))'} strokeWidth={isSelected ? 1.5 : 0.5} />
+                  {/* Country border */}
+                  <rect x={pos.x - 1} y={pos.y - 1} width={pos.w + 2} height={pos.h + 2} rx={4} fill="none"
+                    stroke={isAtWar ? 'hsl(var(--danger))' : isPlayer ? 'hsl(var(--primary))' : 'hsl(var(--map-border))'}
+                    strokeWidth={isPlayer ? 1.5 : isAtWar ? 1.2 : 0.6} strokeDasharray={isAtWar ? '3,2' : 'none'} />
+
                   {layout.map(({ province: prov, x, y, w, h }) => {
                     const isProvSelected = selectedProvinceId === prov.id;
                     const isProvHovered = hoveredProvince === prov.id;
-                    const devOpacity = 0.2 + (prov.development / 100) * 0.4;
+                    const isMoveTarget = moveTargets.has(prov.id);
                     const owner = state.countries[prov.countryId];
+                    const isConquered = prov.countryId !== prov.originalCountryId;
+                    const terrainColor = TERRAIN_COLORS[prov.terrain];
+
+                    // Province armies
+                    const provArmies = Object.values(state.armies).filter(a => a.provinceId === prov.id && !a.targetProvinceId);
+                    const totalTroops = provArmies.reduce((s, a) => s + a.units.reduce((s2, u) => s2 + u.count, 0), 0);
+
                     return (
                       <g key={prov.id}
                         onClick={(e) => { e.stopPropagation(); handleProvinceClick(prov.id, prov.countryId); }}
                         onMouseEnter={() => { setHoveredProvince(prov.id); setHoveredCountry(country.id); }}
                         onMouseLeave={() => { setHoveredProvince(null); setHoveredCountry(null); }}
                         className="cursor-pointer">
-                        <rect x={x} y={y} width={w} height={h} rx={2}
-                          fill={isProvSelected ? 'hsl(var(--primary))' : (owner?.color ?? country.color)}
-                          opacity={isProvSelected ? 0.6 : isProvHovered ? 0.5 : devOpacity}
-                          stroke={isProvSelected ? 'hsl(var(--primary))' : isProvHovered ? 'hsl(var(--foreground))' : 'hsl(var(--map-border))'}
-                          strokeWidth={isProvSelected ? 1.5 : isProvHovered ? 0.8 : 0.3}
+                        {/* Terrain base */}
+                        <rect x={x} y={y} width={w} height={h} rx={1.5}
+                          fill={isProvSelected ? 'hsl(var(--primary))' : isMoveTarget ? 'hsl(var(--success))' : terrainColor}
+                          opacity={isProvSelected ? 0.7 : isMoveTarget ? 0.6 : isProvHovered ? 0.7 : 0.5}
+                          stroke={isProvSelected ? 'hsl(var(--primary))' : isMoveTarget ? 'hsl(var(--success))' : isProvHovered ? 'hsl(var(--foreground))' : 'hsl(var(--map-border))'}
+                          strokeWidth={isProvSelected ? 1.5 : isMoveTarget ? 1.2 : isProvHovered ? 0.8 : 0.3}
                           style={{ transition: 'all 0.15s ease' }} />
-                        {w > 15 && h > 10 && (
-                          <text x={x + w / 2} y={y + h / 2} textAnchor="middle" dominantBaseline="middle"
-                            fontSize={Math.min(6, w / 5)} fill="hsl(var(--foreground))"
+
+                        {/* Country color overlay */}
+                        <rect x={x} y={y} width={w} height={h} rx={1.5}
+                          fill={owner?.color ?? country.color}
+                          opacity={isConquered ? 0.15 : 0.2}
+                          style={{ pointerEvents: 'none' }} />
+
+                        {/* Province name */}
+                        {w > 12 && h > 8 && (
+                          <text x={x + w / 2} y={y + (showDetails ? h * 0.3 : h / 2)} textAnchor="middle" dominantBaseline="middle"
+                            fontSize={Math.min(5.5, w / 5)} fill="hsl(var(--foreground))"
                             fontFamily="'JetBrains Mono', monospace" fontWeight={isProvSelected ? 700 : 400}
-                            opacity={isProvHovered || isProvSelected ? 1 : 0.6} style={{ pointerEvents: 'none' }}>
-                            {prov.name.length > 8 ? prov.name.slice(0, 7) + '…' : prov.name}
+                            opacity={isProvHovered || isProvSelected ? 1 : 0.7} style={{ pointerEvents: 'none' }}>
+                            {prov.name.length > 10 ? prov.name.slice(0, 9) + '…' : prov.name}
                           </text>
+                        )}
+
+                        {/* Detail indicators when zoomed in */}
+                        {showDetails && w > 18 && h > 14 && (
+                          <g style={{ pointerEvents: 'none' }}>
+                            {/* Morale bar */}
+                            <rect x={x + 2} y={y + h - 4} width={w - 4} height={1.5} rx={0.5} fill="hsl(0,0%,20%)" opacity={0.5} />
+                            <rect x={x + 2} y={y + h - 4} width={(w - 4) * (prov.morale / 100)} height={1.5} rx={0.5}
+                              fill={prov.morale > 60 ? 'hsl(var(--success))' : prov.morale > 30 ? 'hsl(var(--warning))' : 'hsl(var(--danger))'} opacity={0.8} />
+
+                            {/* Troop count */}
+                            {totalTroops > 0 && (
+                              <>
+                                <circle cx={x + w - 5} cy={y + 5} r={3.5} fill="hsl(var(--background))" opacity={0.8} />
+                                <text x={x + w - 5} y={y + 5.5} textAnchor="middle" dominantBaseline="middle"
+                                  fontSize={3} fill="hsl(var(--foreground))" fontFamily="'JetBrains Mono', monospace" fontWeight={700}>
+                                  {totalTroops > 99 ? '99+' : totalTroops}
+                                </text>
+                              </>
+                            )}
+
+                            {/* Building count */}
+                            {prov.buildings.length > 0 && (
+                              <text x={x + 4} y={y + 5.5} textAnchor="start" dominantBaseline="middle"
+                                fontSize={3} fill="hsl(var(--muted-foreground))" fontFamily="'JetBrains Mono', monospace">
+                                🏗{prov.buildings.length}
+                              </text>
+                            )}
+
+                            {/* Terrain icon */}
+                            {w > 25 && (
+                              <text x={x + w / 2} y={y + h * 0.55} textAnchor="middle" dominantBaseline="middle"
+                                fontSize={4} opacity={0.4} style={{ pointerEvents: 'none' }}>
+                                {TERRAIN_PATTERNS[prov.terrain]}
+                              </text>
+                            )}
+
+                            {/* Conquered marker */}
+                            {isConquered && (
+                              <text x={x + 3} y={y + h - 6} fontSize={3} fill="hsl(var(--danger))" opacity={0.7}>⚑</text>
+                            )}
+                          </g>
                         )}
                       </g>
                     );
@@ -208,38 +363,98 @@ const WorldMap = () => {
           );
         })}
 
-        {/* Army markers */}
-        {showProvinces && armyPositions.map(({ army, x, y }) => {
+        {/* Army movement arrows */}
+        {showProvinces && armyPositions.filter(a => a.targetX != null).map(({ army, x, y, targetX, targetY }) => {
+          if (!targetX || !targetY) return null;
+          const isPlayer = army.countryId === state.playerCountryId;
+          // Interpolate position based on movement progress
+          const cx = x + (targetX - x) * army.movementProgress;
+          const cy = y + (targetY - y) * army.movementProgress;
+          return (
+            <g key={`move_${army.id}`}>
+              {/* Movement path line */}
+              <line x1={x} y1={y} x2={targetX} y2={targetY}
+                stroke={isPlayer ? 'hsl(42, 100%, 58%)' : 'hsl(0, 72%, 51%)'}
+                strokeWidth={0.8} strokeDasharray="3,2" opacity={0.5}
+                markerEnd={isPlayer ? 'url(#arrowhead)' : 'url(#arrowheadRed)'} />
+              {/* Moving army dot */}
+              <circle cx={cx} cy={cy} r={3.5}
+                fill={isPlayer ? 'hsl(var(--primary))' : state.countries[army.countryId]?.color ?? '#888'}
+                stroke="hsl(var(--foreground))" strokeWidth={0.5} opacity={0.95}>
+                <animate attributeName="r" values="3.5;4;3.5" dur="1s" repeatCount="indefinite" />
+              </circle>
+              <text x={cx} y={cy + 0.5} textAnchor="middle" dominantBaseline="middle" fontSize={3}
+                fill="hsl(var(--foreground))" fontFamily="'JetBrains Mono', monospace" fontWeight={700} style={{ pointerEvents: 'none' }}>
+                {army.units.reduce((s, u) => s + u.count, 0)}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Stationary army markers */}
+        {showProvinces && armyPositions.filter(a => !a.army.targetProvinceId).map(({ army, x, y }) => {
           const totalUnits = army.units.reduce((s, u) => s + u.count, 0);
           const isPlayer = army.countryId === state.playerCountryId;
+          const isSelected = selectedArmyId === army.id;
           const countryColor = state.countries[army.countryId]?.color ?? '#888';
           return (
-            <g key={army.id}>
-              <circle cx={x} cy={y - 3} r={3} fill={isPlayer ? 'hsl(var(--primary))' : countryColor} opacity={0.9} stroke="hsl(var(--foreground))" strokeWidth={0.3} />
-              <text x={x} y={y - 3} textAnchor="middle" dominantBaseline="middle" fontSize={3} fill="hsl(var(--foreground))"
-                fontFamily="'JetBrains Mono', monospace" fontWeight={700} style={{ pointerEvents: 'none' }}>
+            <g key={army.id} onClick={(e) => { e.stopPropagation(); handleArmyClick(army.id); }} className="cursor-pointer">
+              {isSelected && <circle cx={x} cy={y - 4} r={6} fill="none" stroke="hsl(var(--primary))" strokeWidth={0.8} opacity={0.5} filter="url(#glow)" />}
+              <rect x={x - 5} y={y - 7.5} width={10} height={7} rx={2}
+                fill={isPlayer ? 'hsl(var(--primary))' : countryColor}
+                stroke={isSelected ? 'hsl(var(--foreground))' : 'hsl(var(--background))'} strokeWidth={isSelected ? 0.8 : 0.4} opacity={0.95} />
+              <text x={x} y={y - 3.8} textAnchor="middle" dominantBaseline="middle" fontSize={3.5}
+                fill={isPlayer ? 'hsl(var(--primary-foreground))' : 'hsl(var(--foreground))'} fontFamily="'JetBrains Mono', monospace" fontWeight={700}
+                style={{ pointerEvents: 'none' }}>
                 {totalUnits > 99 ? '99+' : totalUnits}
               </text>
             </g>
           );
         })}
+
+        {/* Battle indicators */}
+        {battlePositions.map((b, i) => (
+          <g key={`battle_${i}`}>
+            <circle cx={b.x} cy={b.y} r={5} fill="hsl(var(--danger))" opacity={0.2} filter="url(#battleGlow)">
+              <animate attributeName="r" values="5;8;5" dur="0.8s" repeatCount="indefinite" />
+              <animate attributeName="opacity" values="0.3;0.1;0.3" dur="0.8s" repeatCount="indefinite" />
+            </circle>
+            <text x={b.x} y={b.y + 1} textAnchor="middle" dominantBaseline="middle" fontSize={6} style={{ pointerEvents: 'none' }}>
+              ⚔
+            </text>
+          </g>
+        ))}
       </svg>
 
-      {/* Tooltips */}
+      {/* Province tooltip */}
       {hoveredProvData && !isPanning && (
         <div className="map-tooltip absolute z-20 animate-fade-up"
           style={{ left: `${mousePos.x - (containerRef.current?.getBoundingClientRect().left ?? 0) + 16}px`, top: `${mousePos.y - (containerRef.current?.getBoundingClientRect().top ?? 0) - 10}px` }}>
           <div className="flex items-center gap-2 mb-1.5">
-            <div className="w-2 h-2 rounded-sm bg-primary" />
+            <div className="w-2 h-2 rounded-sm" style={{ background: TERRAIN_COLORS[hoveredProvData.terrain] }} />
             <span className="font-semibold text-foreground text-xs">{hoveredProvData.name}</span>
+            <span className="text-[9px] text-muted-foreground capitalize">({hoveredProvData.terrain})</span>
           </div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[10px] font-mono">
+            <span className="text-muted-foreground">Owner</span><span className="text-foreground text-right">{state.countries[hoveredProvData.countryId]?.code ?? '??'}</span>
             <span className="text-muted-foreground">Pop</span><span className="text-foreground text-right">{(hoveredProvData.population / 1e6).toFixed(1)}M</span>
-            <span className="text-muted-foreground">Terrain</span><span className="text-foreground text-right capitalize">{hoveredProvData.terrain}</span>
+            <span className="text-muted-foreground">Morale</span>
+            <span className={`text-right ${hoveredProvData.morale > 60 ? 'text-stat-positive' : hoveredProvData.morale > 30 ? 'text-stat-neutral' : 'text-stat-negative'}`}>
+              {hoveredProvData.morale.toFixed(0)}%
+            </span>
             <span className="text-muted-foreground">Dev</span><span className="text-foreground text-right">{hoveredProvData.development}/100</span>
-            <span className="text-muted-foreground">Morale</span><span className="text-foreground text-right">{hoveredProvData.morale.toFixed(0)}%</span>
             <span className="text-muted-foreground">Buildings</span><span className="text-foreground text-right">{hoveredProvData.buildings.length}</span>
           </div>
+          {hoveredProvData.buildings.length > 0 && (
+            <div className="mt-1 pt-1 border-t border-border/30 text-[9px] text-muted-foreground">
+              {hoveredProvData.buildings.map(b => `${b.type}(${b.level})`).join(', ')}
+            </div>
+          )}
+          {moveMode && moveTargets.has(hoveredProvData.id) && (
+            <div className="mt-1 pt-1 border-t border-border/30 text-[9px] text-stat-positive font-semibold">
+              ✓ Click to move army here
+            </div>
+          )}
         </div>
       )}
 
@@ -255,16 +470,34 @@ const WorldMap = () => {
             <span className="text-muted-foreground">Stability</span><span className="text-foreground text-right">{hoveredData.stability.toFixed(0)}%</span>
             <span className="text-muted-foreground">Provinces</span><span className="text-foreground text-right">{getProvincesForCountry(state.provinces, hoveredData.id).length}</span>
           </div>
-          {showProvinces && <div className="mt-1 pt-1 border-t border-border/30 text-[9px] text-muted-foreground">Click provinces to manage</div>}
         </div>
       )}
 
       {/* Controls */}
       <div className="absolute bottom-3 right-3 z-20 flex flex-col gap-1">
-        <button onClick={() => setZoom(prev => Math.min(4, prev + 0.3))} className="w-8 h-8 rounded-lg bg-card/80 backdrop-blur-sm border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-card transition-all"><ZoomIn size={14} /></button>
-        <button onClick={() => setZoom(prev => Math.max(0.5, prev - 0.3))} className="w-8 h-8 rounded-lg bg-card/80 backdrop-blur-sm border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-card transition-all"><ZoomOut size={14} /></button>
+        <button onClick={() => setZoom(prev => Math.min(5, prev + 0.4))} className="w-8 h-8 rounded-lg bg-card/80 backdrop-blur-sm border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-card transition-all"><ZoomIn size={14} /></button>
+        <button onClick={() => setZoom(prev => Math.max(0.5, prev - 0.4))} className="w-8 h-8 rounded-lg bg-card/80 backdrop-blur-sm border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-card transition-all"><ZoomOut size={14} /></button>
         <button onClick={resetView} className="w-8 h-8 rounded-lg bg-card/80 backdrop-blur-sm border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-card transition-all"><Maximize2 size={14} /></button>
       </div>
+
+      {/* Selected army actions */}
+      {selectedArmyId && state.armies[selectedArmyId] && !moveMode && showProvinces && (
+        <div className="absolute top-3 right-3 z-20 bg-card/90 backdrop-blur-sm border border-border rounded-lg p-2 space-y-1">
+          <div className="text-[10px] font-mono font-semibold text-foreground">{state.armies[selectedArmyId].name}</div>
+          <div className="flex gap-1 flex-wrap text-[9px]">
+            {state.armies[selectedArmyId].units.map(u => (
+              <span key={u.type} className="px-1 py-0.5 rounded bg-muted/60 text-muted-foreground">
+                {UNIT_STATS[u.type].icon}{u.count}
+              </span>
+            ))}
+          </div>
+          {!state.armies[selectedArmyId].targetProvinceId && state.armies[selectedArmyId].countryId === state.playerCountryId && (
+            <button onClick={() => setMoveMode(true)} className="game-btn-primary w-full text-[9px] py-1">
+              🎯 Move Army
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="absolute bottom-3 left-3 z-20 flex items-center gap-2">
         <span className="text-[10px] font-mono text-muted-foreground bg-card/60 backdrop-blur-sm px-2 py-1 rounded-md border border-border/50">{(zoom * 100).toFixed(0)}%</span>

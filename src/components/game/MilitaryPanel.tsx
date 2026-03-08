@@ -4,10 +4,10 @@ import { UNIT_STATS, ALL_UNIT_TYPES } from '@/data/unitStats';
 import { UnitType, BuildingType } from '@/types/game';
 import { getProvincesForCountry } from '@/data/provinces';
 import { useState } from 'react';
-import { Swords, Shield, Factory, Users, Target, ChevronDown, ChevronUp, AlertTriangle, MapPin, ArrowRight } from 'lucide-react';
+import { Swords, Shield, Factory, Users, Target, ChevronDown, ChevronUp, AlertTriangle, MapPin, ArrowRight, Move, Combine, Scissors } from 'lucide-react';
 
 const MilitaryPanel = () => {
-  const { state, dispatch } = useGame();
+  const { state, dispatch, selectedArmyId, setSelectedArmyId } = useGame();
   const country = state.countries[state.playerCountryId];
   const provs = getProvincesForCountry(state.provinces, state.playerCountryId);
   const myArmies = Object.values(state.armies).filter(a => a.countryId === state.playerCountryId);
@@ -16,17 +16,25 @@ const MilitaryPanel = () => {
   const [expandedUnit, setExpandedUnit] = useState<string | null>(null);
   const [prodProvince, setProdProvince] = useState<string | null>(null);
   const [prodQty, setProdQty] = useState(5);
+  const [expandedArmy, setExpandedArmy] = useState<string | null>(null);
+  const [moveTarget, setMoveTarget] = useState<string>('');
 
-  // Check which units are available
   const availableUnits = ALL_UNIT_TYPES.filter(ut => {
     const stats = UNIT_STATS[ut];
     if (stats.requiredResearch && !country.technology.researched.includes(stats.requiredResearch)) return false;
     return true;
   });
 
-  // Find provinces with production buildings
   const provsWithBuilding = (buildingType: BuildingType) =>
     provs.filter(p => p.buildings.some(b => b.type === buildingType));
+
+  // Active battles involving player
+  const activeBattles = (state.activeBattles ?? []).filter(
+    b => b.attackerCountryId === state.playerCountryId || b.defenderCountryId === state.playerCountryId
+  );
+
+  // Supply cost
+  const supplyCost = myArmies.reduce((s, a) => s + a.units.reduce((s2, u) => s2 + UNIT_STATS[u.type].supplyUsage * u.count, 0), 0);
 
   return (
     <div className="p-3 space-y-3 overflow-y-auto scrollbar-thin h-full animate-panel-in">
@@ -35,17 +43,130 @@ const MilitaryPanel = () => {
         Military Command
       </h2>
 
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-4 gap-2">
         <MiniStat icon={<Users size={11} />} label="Units" value={formatNumber(totalUnits)} />
         <MiniStat icon={<Shield size={11} />} label="Armies" value={String(myArmies.length)} />
         <MiniStat icon={<Target size={11} />} label="Morale" value={`${country.militaryMorale.toFixed(0)}%`} />
+        <MiniStat icon={<Factory size={11} />} label="Supply" value={`${supplyCost}/t`} />
       </div>
 
-      {/* Unit roster */}
+      {/* Active Battles */}
+      {activeBattles.length > 0 && (
+        <div className="game-panel border-danger/30">
+          <div className="game-panel-header" style={{ background: 'linear-gradient(180deg, hsl(0 72% 51% / 0.1) 0%, transparent 100%)' }}>
+            <AlertTriangle size={11} className="text-danger" />
+            <h3 className="!text-danger">Active Battles ({activeBattles.length})</h3>
+          </div>
+          <div className="p-2 space-y-1">
+            {activeBattles.map((b, i) => (
+              <div key={i} className="flex items-center justify-between text-[10px] px-1.5 py-1 rounded bg-danger/5">
+                <span className="text-foreground">⚔ {state.provinces[b.provinceId]?.name}</span>
+                <span className="text-muted-foreground font-mono">
+                  {state.countries[b.attackerCountryId]?.code} vs {state.countries[b.defenderCountryId]?.code}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Armies */}
+      <div className="game-panel">
+        <div className="game-panel-header">
+          <Shield size={11} className="text-primary/70" />
+          <h3>Armies</h3>
+          <span className="text-[10px] font-mono text-muted-foreground ml-auto">{myArmies.length}</span>
+        </div>
+        <div className="divide-y divide-border/20">
+          {myArmies.length === 0 && <p className="p-3 text-[10px] text-muted-foreground">No armies. Produce units first.</p>}
+          {myArmies.map(army => {
+            const isExpanded = expandedArmy === army.id;
+            const isSelected = selectedArmyId === army.id;
+            const currentProv = state.provinces[army.provinceId];
+            const adjacentProvs = currentProv?.adjacentProvinces.map(id => state.provinces[id]).filter(Boolean) ?? [];
+            const totalHP = army.units.reduce((s, u) => s + u.health * u.count, 0);
+            const totalCount = army.units.reduce((s, u) => s + u.count, 0);
+            const avgHP = totalCount > 0 ? totalHP / totalCount : 0;
+
+            return (
+              <div key={army.id} className={`p-2.5 transition-colors ${isSelected ? 'bg-primary/5' : 'hover:bg-muted/30'}`}>
+                <div className="flex items-center justify-between mb-1 cursor-pointer"
+                  onClick={() => { setExpandedArmy(isExpanded ? null : army.id); setSelectedArmyId(army.id); }}>
+                  <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full ${army.targetProvinceId ? 'bg-warning animate-pulse' : 'bg-success'}`} />
+                    <span className="text-xs font-medium text-foreground">{army.name}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                      <MapPin size={9} /> {currentProv?.name}
+                    </span>
+                    {isExpanded ? <ChevronUp size={10} /> : <ChevronDown size={10} />}
+                  </div>
+                </div>
+
+                <div className="flex gap-1 flex-wrap text-[9px]">
+                  {army.units.map(u => (
+                    <span key={u.type} className="px-1.5 py-0.5 rounded bg-muted/60 text-muted-foreground">
+                      {UNIT_STATS[u.type].icon} {u.count}
+                    </span>
+                  ))}
+                </div>
+
+                {/* Health bar */}
+                <div className="mt-1 flex items-center gap-2">
+                  <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all"
+                      style={{ width: `${avgHP}%`, background: avgHP > 60 ? 'hsl(var(--success))' : avgHP > 30 ? 'hsl(var(--warning))' : 'hsl(var(--danger))' }} />
+                  </div>
+                  <span className="text-[8px] font-mono text-muted-foreground">{avgHP.toFixed(0)}%</span>
+                </div>
+
+                {army.targetProvinceId && (
+                  <div className="text-[9px] text-primary mt-1 flex items-center gap-1">
+                    <ArrowRight size={8} /> Moving to {state.provinces[army.targetProvinceId]?.name} ({(army.movementProgress * 100).toFixed(0)}%)
+                  </div>
+                )}
+
+                {isExpanded && !army.targetProvinceId && (
+                  <div className="mt-2 pt-2 border-t border-border/30 space-y-2 animate-fade-up">
+                    {/* Move */}
+                    <div className="flex items-center gap-1">
+                      <Move size={10} className="text-muted-foreground" />
+                      <select value={moveTarget} onChange={e => setMoveTarget(e.target.value)}
+                        className="flex-1 bg-muted border border-border rounded px-2 py-1 text-[10px] text-foreground outline-none">
+                        <option value="">Move to...</option>
+                        {adjacentProvs.map(p => (
+                          <option key={p!.id} value={p!.id}>
+                            {p!.name} ({p!.terrain}) - {state.countries[p!.countryId]?.code}
+                          </option>
+                        ))}
+                      </select>
+                      <button onClick={() => { if (moveTarget) dispatch({ type: 'MOVE_ARMY', armyId: army.id, targetProvinceId: moveTarget }); setMoveTarget(''); }}
+                        disabled={!moveTarget} className="game-btn-primary text-[9px] py-1 disabled:opacity-30">Go</button>
+                    </div>
+
+                    {/* Merge with other armies in same province */}
+                    {myArmies.filter(a => a.id !== army.id && a.provinceId === army.provinceId && !a.targetProvinceId).length > 0 && (
+                      <button onClick={() => {
+                        const others = myArmies.filter(a => a.id !== army.id && a.provinceId === army.provinceId && !a.targetProvinceId);
+                        dispatch({ type: 'MERGE_ARMIES', armyIds: [army.id, ...others.map(a => a.id)] });
+                      }} className="game-btn-secondary w-full text-[9px] py-1 flex items-center justify-center gap-1">
+                        <Combine size={9} /> Merge with nearby armies
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Unit Roster */}
       <div className="game-panel">
         <div className="game-panel-header">
           <Swords size={11} className="text-primary/70" />
-          <h3>Available Units</h3>
+          <h3>Recruit Units</h3>
         </div>
         <div className="divide-y divide-border/30">
           {availableUnits.map(type => {
@@ -68,7 +189,7 @@ const MilitaryPanel = () => {
                         <span>ATK:{stats.attack}</span>
                         <span>DEF:{stats.defense}</span>
                         <span>SPD:{stats.speed}</span>
-                        <span>HP:{stats.health}</span>
+                        {stats.range > 0 && <span className="text-info">RNG:{stats.range}</span>}
                       </div>
                     </div>
                   </div>
@@ -85,8 +206,8 @@ const MilitaryPanel = () => {
                       {stats.weakVs.length > 0 && <span className="text-stat-negative">Weak vs: {stats.weakVs.join(', ')}</span>}
                     </div>
                     <div className="text-[10px] text-muted-foreground">
-                      Requires: {stats.requiredBuilding}
-                      {stats.requiredResearch && ` · Research: ${stats.requiredResearch}`}
+                      Supply: {stats.supplyUsage}/unit · HP: {stats.health}
+                      {stats.range >= 2 && <span className="text-info ml-1">· Ranged bombardment</span>}
                     </div>
 
                     {provsForUnit.length === 0 ? (
@@ -119,40 +240,6 @@ const MilitaryPanel = () => {
               </div>
             );
           })}
-        </div>
-      </div>
-
-      {/* Armies */}
-      <div className="game-panel">
-        <div className="game-panel-header">
-          <Shield size={11} className="text-primary/70" />
-          <h3>Armies</h3>
-          <span className="text-[10px] font-mono text-muted-foreground ml-auto">{myArmies.length}</span>
-        </div>
-        <div className="divide-y divide-border/20">
-          {myArmies.length === 0 && <p className="p-3 text-[10px] text-muted-foreground">No armies. Produce units first.</p>}
-          {myArmies.map(army => (
-            <div key={army.id} className="p-2.5">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-medium text-foreground">{army.name}</span>
-                <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                  <MapPin size={9} /> {state.provinces[army.provinceId]?.name}
-                </span>
-              </div>
-              <div className="flex gap-1 flex-wrap text-[9px]">
-                {army.units.map(u => (
-                  <span key={u.type} className="px-1.5 py-0.5 rounded bg-muted/60 text-muted-foreground">
-                    {UNIT_STATS[u.type].icon} {u.count}
-                  </span>
-                ))}
-              </div>
-              {army.targetProvinceId && (
-                <div className="text-[9px] text-primary mt-1 flex items-center gap-1">
-                  <ArrowRight size={8} /> Moving to {state.provinces[army.targetProvinceId]?.name} ({(army.movementProgress * 100).toFixed(0)}%)
-                </div>
-              )}
-            </div>
-          ))}
         </div>
       </div>
 
