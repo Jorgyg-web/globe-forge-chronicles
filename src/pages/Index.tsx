@@ -8,6 +8,7 @@ import MilitaryPanel from '@/components/game/MilitaryPanel';
 import DiplomacyPanel from '@/components/game/DiplomacyPanel';
 import TechnologyPanel from '@/components/game/TechnologyPanel';
 import InfrastructurePanel from '@/components/game/InfrastructurePanel';
+import ProvincePanel from '@/components/game/ProvincePanel';
 import EventLog from '@/components/game/EventLog';
 import { useMemo } from 'react';
 
@@ -17,6 +18,7 @@ const GameContent = () => {
   const panel = useMemo(() => {
     switch (activePanel) {
       case 'overview': return <OverviewPanel />;
+      case 'province': return <ProvincePanel />;
       case 'economy': return <EconomyPanel />;
       case 'military': return <MilitaryPanel />;
       case 'diplomacy': return <DiplomacyPanel />;
@@ -30,13 +32,11 @@ const GameContent = () => {
       <TopBar />
       <div className="flex flex-1 overflow-hidden">
         <SideNav />
-        {/* Left panel */}
         <div className="w-[340px] border-r border-panel overflow-hidden flex flex-col shrink-0 bg-card">
           <div className="flex-1 overflow-hidden" key={activePanel}>
             {panel}
           </div>
         </div>
-        {/* Main area */}
         <div className="flex-1 flex flex-col overflow-hidden">
           <div className="flex-1 overflow-hidden">
             <WorldMap />

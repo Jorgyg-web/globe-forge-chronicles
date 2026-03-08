@@ -1,6 +1,7 @@
 // Core game types - designed for future multiplayer serialization
 
 export type CountryId = string;
+export type ProvinceId = string;
 export type PlayerId = string;
 
 export interface GameState {
@@ -8,6 +9,7 @@ export interface GameState {
   year: number;
   month: number;
   countries: Record<CountryId, Country>;
+  provinces: Record<ProvinceId, Province>;
   wars: War[];
   alliances: Alliance[];
   tradeAgreements: TradeAgreement[];
@@ -15,6 +17,51 @@ export interface GameState {
   events: GameEvent[];
   speed: GameSpeed;
   paused: boolean;
+}
+
+// Province
+export interface Province {
+  id: ProvinceId;
+  countryId: CountryId;
+  name: string;
+  population: number;
+  gdpContribution: number;
+  stability: number;
+  corruption: number;
+  unemployment: number;
+  infrastructure: ProvinceInfrastructure;
+  industry: ProvinceIndustry;
+  military: ProvinceMilitary;
+  resources: ProvinceResources;
+  development: number; // 0-100 overall development index
+}
+
+export interface ProvinceInfrastructure {
+  roads: number; // 0-10
+  railways: number;
+  ports: number;
+  airports: number;
+  powerPlants: number;
+  communications: number;
+}
+
+export interface ProvinceIndustry {
+  civilian: number; // 0-10 factory level
+  military: number; // 0-10 military factory level
+  energy: number; // 0-10
+  research: number; // 0-10 research center level
+}
+
+export interface ProvinceMilitary {
+  bases: number;
+  garrison: number; // troops stationed
+}
+
+export interface ProvinceResources {
+  oil: number; // 0-10 abundance
+  minerals: number;
+  agriculture: number;
+  rareEarth: number;
 }
 
 export type GameSpeed = 'slow' | 'normal' | 'fast';
@@ -229,6 +276,10 @@ export type GameAction =
   | { type: 'REMOVE_EMBARGO'; countryId: CountryId; targetId: CountryId }
   | { type: 'START_RESEARCH'; countryId: CountryId; techId: string }
   | { type: 'SET_CORRUPTION'; countryId: CountryId; level: number }
+  | { type: 'UPGRADE_PROVINCE_INFRA'; provinceId: ProvinceId; infra: keyof ProvinceInfrastructure }
+  | { type: 'UPGRADE_PROVINCE_INDUSTRY'; provinceId: ProvinceId; industry: keyof ProvinceIndustry }
+  | { type: 'BUILD_PROVINCE_BASE'; provinceId: ProvinceId }
+  | { type: 'GARRISON_PROVINCE'; provinceId: ProvinceId; troops: number }
   | { type: 'NEXT_TURN' }
   | { type: 'SET_SPEED'; speed: GameSpeed }
   | { type: 'TOGGLE_PAUSE' };
