@@ -62,10 +62,7 @@ function canAfford(have: Resources, cost: Resources): boolean {
 }
 function uid(): string { return Math.random().toString(36).slice(2, 10); }
 
-// Terrain movement cost multiplier (higher = slower)
-const TERRAIN_MOVEMENT_COST: Record<string, number> = {
-  plains: 1, coastal: 1, urban: 0.8, forest: 1.4, desert: 1.3, mountain: 2, arctic: 1.8,
-};
+// TERRAIN_MOVEMENT_COST and TERRAIN_SUPPLY_EFFICIENCY are now imported from types/game
 
 // ─── Building ───
 function handleBuild(state: GameState, provId: ProvinceId, buildingType: BuildingType): GameState {
