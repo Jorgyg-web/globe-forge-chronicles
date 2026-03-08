@@ -1,4 +1,4 @@
-import { GameState, GameAction, Country, CountryId, MilitaryUnits, UnitType, War, Battle, GameEvent, ProvinceId, Province } from '@/types/game';
+import { GameState, GameAction, Country, CountryId, MilitaryUnits, UnitType, War, Battle, GameEvent, ProvinceId, Province, ConstructionItem } from '@/types/game';
 import { UNIT_STATS } from '@/data/unitStats';
 import { TECHNOLOGIES } from '@/data/technologies';
 
@@ -207,11 +207,21 @@ export function processAction(state: GameState, action: GameAction): GameState {
       if (!prov) return state;
       const current = prov.infrastructure[action.infra];
       if (current >= 10) return state;
-      return updateProvince(state, action.provinceId, p => ({
-        ...p,
-        infrastructure: { ...p.infrastructure, [action.infra]: current + 1 },
-        development: Math.min(100, p.development + 1),
-      }));
+      const cost = current * 150;
+      const turnsRequired = Math.max(2, current + 1);
+      const item: ConstructionItem = {
+        id: `build_${state.turn}_${action.provinceId}_${action.infra}_${Date.now()}`,
+        countryId: prov.countryId,
+        provinceId: action.provinceId,
+        category: 'infrastructure',
+        type: action.infra,
+        label: `${action.infra} → Lv.${current + 1}`,
+        cost,
+        turnsRequired,
+        turnsRemaining: turnsRequired,
+        startedTurn: state.turn,
+      };
+      return { ...state, constructionQueue: [...state.constructionQueue, item] };
     }
 
     case 'UPGRADE_PROVINCE_INDUSTRY': {
@@ -219,20 +229,41 @@ export function processAction(state: GameState, action: GameAction): GameState {
       if (!prov) return state;
       const current = prov.industry[action.industry];
       if (current >= 10) return state;
-      return updateProvince(state, action.provinceId, p => ({
-        ...p,
-        industry: { ...p.industry, [action.industry]: current + 1 },
-        development: Math.min(100, p.development + 1),
-      }));
+      const cost = current * 200;
+      const turnsRequired = Math.max(2, current + 1);
+      const item: ConstructionItem = {
+        id: `build_${state.turn}_${action.provinceId}_${action.industry}_${Date.now()}`,
+        countryId: prov.countryId,
+        provinceId: action.provinceId,
+        category: 'industry',
+        type: action.industry,
+        label: `${action.industry} → Lv.${current + 1}`,
+        cost,
+        turnsRequired,
+        turnsRemaining: turnsRequired,
+        startedTurn: state.turn,
+      };
+      return { ...state, constructionQueue: [...state.constructionQueue, item] };
     }
 
     case 'BUILD_PROVINCE_BASE': {
       const prov = state.provinces[action.provinceId];
       if (!prov) return state;
-      return updateProvince(state, action.provinceId, p => ({
-        ...p,
-        military: { ...p.military, bases: p.military.bases + 1 },
-      }));
+      const cost = 500;
+      const turnsRequired = 4;
+      const item: ConstructionItem = {
+        id: `build_${state.turn}_${action.provinceId}_base_${Date.now()}`,
+        countryId: prov.countryId,
+        provinceId: action.provinceId,
+        category: 'military',
+        type: 'base',
+        label: `Military Base`,
+        cost,
+        turnsRequired,
+        turnsRemaining: turnsRequired,
+        startedTurn: state.turn,
+      };
+      return { ...state, constructionQueue: [...state.constructionQueue, item] };
     }
 
     case 'GARRISON_PROVINCE': {
@@ -242,6 +273,10 @@ export function processAction(state: GameState, action: GameAction): GameState {
         ...p,
         military: { ...p.military, garrison: p.military.garrison + action.troops },
       }));
+    }
+
+    case 'CANCEL_CONSTRUCTION': {
+      return { ...state, constructionQueue: state.constructionQueue.filter(i => i.id !== action.itemId) };
     }
 
     case 'NEXT_TURN':
@@ -290,6 +325,9 @@ function processTurn(state: GameState): GameState {
     newState.year += 1;
   }
 
+  // Process construction queue
+  newState = processConstructionQueue(newState, newEvents);
+
   // Process each country
   for (const id of Object.keys(newState.countries)) {
     newState = updateCountry(newState, id, c => processCountryTurn(c, newState));
@@ -326,6 +364,63 @@ function processTurn(state: GameState): GameState {
   newState.events = [...newState.events, ...newEvents];
 
   return newState;
+}
+
+function processConstructionQueue(state: GameState, events: GameEvent[]): GameState {
+  let newState = { ...state };
+  const remaining: ConstructionItem[] = [];
+
+  for (const item of newState.constructionQueue) {
+    const updated = { ...item, turnsRemaining: item.turnsRemaining - 1 };
+    if (updated.turnsRemaining <= 0) {
+      // Complete the construction
+      newState = applyConstructionComplete(newState, item);
+      events.push({
+        id: `evt_${newState.turn}_build_${item.id}`,
+        turn: newState.turn,
+        type: 'economy',
+        title: 'Construction Complete',
+        description: `${item.label} finished${item.provinceId ? ` in ${newState.provinces[item.provinceId]?.name || 'province'}` : ''}`,
+        countryId: item.countryId,
+      });
+    } else {
+      remaining.push(updated);
+    }
+  }
+
+  newState.constructionQueue = remaining;
+  return newState;
+}
+
+function applyConstructionComplete(state: GameState, item: ConstructionItem): GameState {
+  if (item.provinceId) {
+    const prov = state.provinces[item.provinceId];
+    if (!prov) return state;
+
+    if (item.category === 'infrastructure') {
+      const key = item.type as keyof Province['infrastructure'];
+      return updateProvince(state, item.provinceId, p => ({
+        ...p,
+        infrastructure: { ...p.infrastructure, [key]: Math.min(10, p.infrastructure[key] + 1) },
+        development: Math.min(100, p.development + 1),
+      }));
+    }
+    if (item.category === 'industry') {
+      const key = item.type as keyof Province['industry'];
+      return updateProvince(state, item.provinceId, p => ({
+        ...p,
+        industry: { ...p.industry, [key]: Math.min(10, p.industry[key] + 1) },
+        development: Math.min(100, p.development + 1),
+      }));
+    }
+    if (item.category === 'military' && item.type === 'base') {
+      return updateProvince(state, item.provinceId, p => ({
+        ...p,
+        military: { ...p.military, bases: p.military.bases + 1 },
+      }));
+    }
+  }
+  return state;
 }
 
 function processCountryTurn(country: Country, _state: GameState): Country {
