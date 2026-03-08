@@ -8,9 +8,17 @@ const RESOURCE_ICONS: Record<keyof Resources, React.ReactNode> = {
 };
 
 const TopBar = () => {
-  const { state, dispatch } = useGame();
+  const { state, dispatch, worldLoading } = useGame();
   const playerCountry = state.countries[state.playerCountryId];
   const activeWars = state.wars.filter(w => w.active).length;
+
+  if (worldLoading || !playerCountry) {
+    return (
+      <div className="h-11 bg-panel border-b border-panel flex items-center justify-center px-3 shrink-0">
+        <span className="text-muted-foreground text-xs font-mono">Loading...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="h-11 bg-panel border-b border-panel flex items-center justify-between px-3 shrink-0 relative">
