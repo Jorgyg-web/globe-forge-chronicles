@@ -1,159 +1,348 @@
-import { Province } from '@/types/game';
+import { Province, Building, TerrainType, Resources, ProvinceId } from '@/types/game';
 
-const p = (
-  id: string, countryId: string, name: string,
-  pop: number, gdp: number, dev: number,
-  resources: Partial<Province['resources']> = {},
-): Province => ({
-  id, countryId, name,
-  population: pop,
-  gdpContribution: gdp,
-  stability: 50 + Math.floor(Math.random() * 40),
-  corruption: 5 + Math.floor(Math.random() * 30),
-  unemployment: 2 + Math.random() * 10,
-  development: dev,
-  infrastructure: {
-    roads: Math.floor(dev / 15) + 1,
-    railways: Math.floor(dev / 20) + 1,
-    ports: Math.random() > 0.5 ? Math.floor(dev / 25) + 1 : 0,
-    airports: Math.floor(dev / 30) + 1,
-    powerPlants: Math.floor(dev / 20) + 1,
-    communications: Math.floor(dev / 15) + 1,
-  },
-  industry: {
-    civilian: Math.floor(dev / 15) + 1,
-    military: Math.floor(dev / 25),
-    energy: Math.floor(dev / 20) + 1,
-    research: Math.floor(dev / 30),
-  },
-  military: { bases: Math.floor(dev / 40), garrison: Math.floor(pop * 0.001) },
-  resources: { oil: 0, minerals: 0, agriculture: 0, rareEarth: 0, ...resources },
-});
+interface ProvinceDef {
+  id: string; countryId: string; name: string;
+  pop: number; terrain: TerrainType; isCoastal: boolean;
+  dev: number; resources: Partial<Resources>;
+  buildings?: Partial<Record<string, number>>;
+  adjacent: string[];
+}
 
-export const INITIAL_PROVINCES: Province[] = [
-  // USA
-  p('usa_ne', 'usa', 'Northeast', 56_000_000, 4_500_000, 85, { minerals: 2 }),
-  p('usa_se', 'usa', 'Southeast', 85_000_000, 4_000_000, 70, { agriculture: 7 }),
-  p('usa_mw', 'usa', 'Midwest', 68_000_000, 3_800_000, 75, { agriculture: 8, minerals: 4 }),
-  p('usa_sw', 'usa', 'Southwest', 42_000_000, 2_800_000, 72, { oil: 6, minerals: 5 }),
-  p('usa_w', 'usa', 'West Coast', 53_000_000, 6_200_000, 90, { rareEarth: 2 }),
-  p('usa_ak', 'usa', 'Alaska & Pacific', 27_000_000, 3_700_000, 65, { oil: 8, minerals: 3 }),
+function makeProvince(d: ProvinceDef): Province {
+  const buildings: Building[] = [];
+  // Auto-generate basic buildings based on development
+  if (d.dev >= 30) buildings.push({ type: 'infrastructure', level: Math.min(5, Math.floor(d.dev / 20)) });
+  if (d.dev >= 40) buildings.push({ type: 'industry', level: Math.min(5, Math.floor(d.dev / 25)) });
+  if (d.dev >= 50) buildings.push({ type: 'barracks', level: Math.min(3, Math.floor(d.dev / 35)) });
+  if (d.dev >= 60) buildings.push({ type: 'resourceExtractor', level: Math.min(3, Math.floor(d.dev / 30)) });
 
-  // China
-  p('chn_e', 'chn', 'East China', 450_000_000, 6_000_000, 80, { minerals: 3 }),
-  p('chn_s', 'chn', 'South China', 350_000_000, 4_500_000, 75, { agriculture: 6 }),
-  p('chn_n', 'chn', 'North China', 300_000_000, 3_500_000, 70, { minerals: 7, oil: 3 }),
-  p('chn_w', 'chn', 'West China', 200_000_000, 2_500_000, 45, { rareEarth: 9, minerals: 6 }),
-  p('chn_c', 'chn', 'Central China', 100_000_000, 1_500_000, 60, { agriculture: 8 }),
+  // Add extra buildings from definition
+  if (d.buildings) {
+    for (const [type, level] of Object.entries(d.buildings)) {
+      if (level && level > 0) {
+        const existing = buildings.find(b => b.type === type);
+        if (existing) existing.level = Math.max(existing.level, level);
+        else buildings.push({ type: type as any, level });
+      }
+    }
+  }
 
-  // Russia
-  p('rus_w', 'rus', 'Western Russia', 80_000_000, 1_000_000, 65, { oil: 4, minerals: 5 }),
-  p('rus_s', 'rus', 'Southern Russia', 25_000_000, 400_000, 50, { agriculture: 6, oil: 3 }),
-  p('rus_u', 'rus', 'Urals', 15_000_000, 350_000, 55, { minerals: 9, oil: 5 }),
-  p('rus_si', 'rus', 'Siberia', 14_000_000, 300_000, 35, { oil: 8, minerals: 7, rareEarth: 4 }),
-  p('rus_fe', 'rus', 'Far East', 10_000_000, 150_000, 30, { minerals: 5, oil: 3 }),
+  return {
+    id: d.id,
+    countryId: d.countryId,
+    originalCountryId: d.countryId,
+    name: d.name,
+    population: d.pop,
+    morale: 60 + Math.floor(Math.random() * 30),
+    stability: 50 + Math.floor(Math.random() * 40),
+    corruption: 5 + Math.floor(Math.random() * 25),
+    resourceProduction: {
+      food: d.resources.food ?? 0,
+      oil: d.resources.oil ?? 0,
+      metal: d.resources.metal ?? 0,
+      electronics: d.resources.electronics ?? 0,
+      money: Math.floor(d.pop / 50000) + (d.dev * 5),
+    },
+    buildings,
+    terrain: d.terrain,
+    isCoastal: d.isCoastal,
+    development: d.dev,
+    adjacentProvinces: d.adjacent,
+  };
+}
 
-  // UK
-  p('gbr_en', 'gbr', 'England', 56_000_000, 2_600_000, 82),
-  p('gbr_sc', 'gbr', 'Scotland', 5_500_000, 300_000, 75, { oil: 5 }),
-  p('gbr_wa', 'gbr', 'Wales', 3_200_000, 150_000, 65, { minerals: 4 }),
-  p('gbr_ni', 'gbr', 'N. Ireland', 1_900_000, 100_000, 60),
+const PROVINCE_DEFS: ProvinceDef[] = [
+  // ─── USA ───
+  { id: 'usa_ne', countryId: 'usa', name: 'Northeast', pop: 56_000_000, terrain: 'urban', isCoastal: true, dev: 85,
+    resources: { food: 10, metal: 20, electronics: 40, money: 500 }, buildings: { tankFactory: 2, aircraftFactory: 1 },
+    adjacent: ['usa_se', 'usa_mw'] },
+  { id: 'usa_se', countryId: 'usa', name: 'Southeast', pop: 85_000_000, terrain: 'plains', isCoastal: true, dev: 70,
+    resources: { food: 60, oil: 10, metal: 15, money: 300 }, buildings: { barracks: 2 },
+    adjacent: ['usa_ne', 'usa_mw', 'usa_sw'] },
+  { id: 'usa_mw', countryId: 'usa', name: 'Midwest', pop: 68_000_000, terrain: 'plains', isCoastal: false, dev: 75,
+    resources: { food: 80, metal: 30, money: 350 },
+    adjacent: ['usa_ne', 'usa_se', 'usa_sw', 'usa_w'] },
+  { id: 'usa_sw', countryId: 'usa', name: 'Southwest', pop: 42_000_000, terrain: 'desert', isCoastal: false, dev: 72,
+    resources: { oil: 50, metal: 40, electronics: 15, money: 250 }, buildings: { tankFactory: 1 },
+    adjacent: ['usa_se', 'usa_mw', 'usa_w', 'mex_n'] },
+  { id: 'usa_w', countryId: 'usa', name: 'West Coast', pop: 53_000_000, terrain: 'coastal', isCoastal: true, dev: 90,
+    resources: { food: 20, electronics: 60, money: 600 }, buildings: { aircraftFactory: 2, navalBase: 1 },
+    adjacent: ['usa_mw', 'usa_sw', 'usa_ak'] },
+  { id: 'usa_ak', countryId: 'usa', name: 'Alaska & Pacific', pop: 5_000_000, terrain: 'arctic', isCoastal: true, dev: 45,
+    resources: { oil: 70, metal: 20, money: 80 }, buildings: { navalBase: 1 },
+    adjacent: ['usa_w', 'can_bc'] },
 
-  // France
-  p('fra_idf', 'fra', 'Île-de-France', 12_000_000, 1_000_000, 90),
-  p('fra_s', 'fra', 'South France', 20_000_000, 700_000, 72, { agriculture: 6 }),
-  p('fra_n', 'fra', 'North France', 18_000_000, 650_000, 70, { agriculture: 5 }),
-  p('fra_e', 'fra', 'East France', 17_000_000, 650_000, 68, { minerals: 3 }),
+  // ─── China ───
+  { id: 'chn_e', countryId: 'chn', name: 'East China', pop: 450_000_000, terrain: 'urban', isCoastal: true, dev: 80,
+    resources: { food: 30, metal: 25, electronics: 50, money: 600 }, buildings: { tankFactory: 2, aircraftFactory: 1 },
+    adjacent: ['chn_s', 'chn_n', 'chn_c', 'kor_c'] },
+  { id: 'chn_s', countryId: 'chn', name: 'South China', pop: 350_000_000, terrain: 'forest', isCoastal: true, dev: 75,
+    resources: { food: 50, electronics: 30, money: 400 }, buildings: { navalBase: 1 },
+    adjacent: ['chn_e', 'chn_c'] },
+  { id: 'chn_n', countryId: 'chn', name: 'North China', pop: 300_000_000, terrain: 'plains', isCoastal: true, dev: 70,
+    resources: { food: 40, oil: 25, metal: 50, money: 350 }, buildings: { barracks: 2 },
+    adjacent: ['chn_e', 'chn_w', 'chn_c', 'rus_fe'] },
+  { id: 'chn_w', countryId: 'chn', name: 'West China', pop: 200_000_000, terrain: 'mountain', isCoastal: false, dev: 45,
+    resources: { metal: 60, oil: 15, money: 150 },
+    adjacent: ['chn_n', 'chn_c', 'ind_n'] },
+  { id: 'chn_c', countryId: 'chn', name: 'Central China', pop: 100_000_000, terrain: 'plains', isCoastal: false, dev: 60,
+    resources: { food: 70, metal: 20, money: 200 },
+    adjacent: ['chn_e', 'chn_s', 'chn_n', 'chn_w'] },
 
-  // Germany
-  p('deu_n', 'deu', 'North Germany', 25_000_000, 1_200_000, 82),
-  p('deu_s', 'deu', 'South Germany', 30_000_000, 1_800_000, 88, { minerals: 3 }),
-  p('deu_e', 'deu', 'East Germany', 16_000_000, 700_000, 72),
-  p('deu_w', 'deu', 'West Germany', 12_000_000, 500_000, 80),
+  // ─── Russia ───
+  { id: 'rus_w', countryId: 'rus', name: 'Western Russia', pop: 80_000_000, terrain: 'forest', isCoastal: false, dev: 65,
+    resources: { food: 30, oil: 30, metal: 35, money: 300 }, buildings: { barracks: 2, tankFactory: 1 },
+    adjacent: ['rus_s', 'rus_u', 'pol_n', 'deu_e'] },
+  { id: 'rus_s', countryId: 'rus', name: 'Southern Russia', pop: 25_000_000, terrain: 'plains', isCoastal: true, dev: 50,
+    resources: { food: 50, oil: 20, money: 150 },
+    adjacent: ['rus_w', 'rus_u', 'tur_e'] },
+  { id: 'rus_u', countryId: 'rus', name: 'Urals', pop: 15_000_000, terrain: 'mountain', isCoastal: false, dev: 55,
+    resources: { metal: 80, oil: 40, money: 120 }, buildings: { tankFactory: 1 },
+    adjacent: ['rus_w', 'rus_s', 'rus_si'] },
+  { id: 'rus_si', countryId: 'rus', name: 'Siberia', pop: 14_000_000, terrain: 'arctic', isCoastal: true, dev: 35,
+    resources: { oil: 70, metal: 50, money: 80 },
+    adjacent: ['rus_u', 'rus_fe'] },
+  { id: 'rus_fe', countryId: 'rus', name: 'Far East', pop: 10_000_000, terrain: 'forest', isCoastal: true, dev: 30,
+    resources: { oil: 20, metal: 30, money: 50 }, buildings: { navalBase: 1 },
+    adjacent: ['rus_si', 'chn_n'] },
 
-  // Japan
-  p('jpn_k', 'jpn', 'Kantō', 44_000_000, 2_200_000, 95),
-  p('jpn_kn', 'jpn', 'Kansai', 22_000_000, 1_100_000, 88),
-  p('jpn_c', 'jpn', 'Chūbu', 22_000_000, 900_000, 82),
-  p('jpn_s', 'jpn', 'Kyūshū & South', 20_000_000, 500_000, 75),
-  p('jpn_n', 'jpn', 'Hokkaido & North', 17_000_000, 400_000, 70, { agriculture: 6 }),
+  // ─── UK ───
+  { id: 'gbr_en', countryId: 'gbr', name: 'England', pop: 56_000_000, terrain: 'urban', isCoastal: true, dev: 82,
+    resources: { food: 15, electronics: 30, money: 450 }, buildings: { aircraftFactory: 1, navalBase: 2 },
+    adjacent: ['gbr_sc', 'gbr_wa', 'fra_n'] },
+  { id: 'gbr_sc', countryId: 'gbr', name: 'Scotland', pop: 5_500_000, terrain: 'mountain', isCoastal: true, dev: 75,
+    resources: { oil: 40, food: 10, money: 100 },
+    adjacent: ['gbr_en', 'gbr_ni'] },
+  { id: 'gbr_wa', countryId: 'gbr', name: 'Wales', pop: 3_200_000, terrain: 'mountain', isCoastal: true, dev: 65,
+    resources: { metal: 30, money: 50 },
+    adjacent: ['gbr_en'] },
+  { id: 'gbr_ni', countryId: 'gbr', name: 'N. Ireland', pop: 1_900_000, terrain: 'plains', isCoastal: true, dev: 60,
+    resources: { food: 15, money: 30 },
+    adjacent: ['gbr_sc'] },
 
-  // India
-  p('ind_n', 'ind', 'North India', 450_000_000, 900_000, 45, { agriculture: 7 }),
-  p('ind_s', 'ind', 'South India', 300_000_000, 1_000_000, 55, { rareEarth: 3 }),
-  p('ind_w', 'ind', 'West India', 280_000_000, 900_000, 52, { oil: 2 }),
-  p('ind_e', 'ind', 'East India', 250_000_000, 500_000, 40, { minerals: 5, agriculture: 6 }),
-  p('ind_c', 'ind', 'Central India', 100_000_000, 200_000, 35, { minerals: 4 }),
+  // ─── France ───
+  { id: 'fra_idf', countryId: 'fra', name: 'Île-de-France', pop: 12_000_000, terrain: 'urban', isCoastal: false, dev: 90,
+    resources: { electronics: 25, money: 400 }, buildings: { aircraftFactory: 1, tankFactory: 1 },
+    adjacent: ['fra_n', 'fra_e', 'fra_s'] },
+  { id: 'fra_s', countryId: 'fra', name: 'South France', pop: 20_000_000, terrain: 'coastal', isCoastal: true, dev: 72,
+    resources: { food: 50, money: 200 }, buildings: { navalBase: 1 },
+    adjacent: ['fra_idf', 'fra_e', 'ita_n'] },
+  { id: 'fra_n', countryId: 'fra', name: 'North France', pop: 18_000_000, terrain: 'plains', isCoastal: true, dev: 70,
+    resources: { food: 40, money: 180 },
+    adjacent: ['fra_idf', 'gbr_en', 'deu_w'] },
+  { id: 'fra_e', countryId: 'fra', name: 'East France', pop: 17_000_000, terrain: 'forest', isCoastal: false, dev: 68,
+    resources: { metal: 25, food: 20, money: 170 },
+    adjacent: ['fra_idf', 'fra_s', 'deu_s'] },
 
-  // Brazil
-  p('bra_se', 'bra', 'Southeast', 90_000_000, 900_000, 65),
-  p('bra_ne', 'bra', 'Northeast', 57_000_000, 300_000, 40, { agriculture: 5 }),
-  p('bra_s', 'bra', 'South', 30_000_000, 350_000, 60, { agriculture: 7 }),
-  p('bra_n', 'bra', 'North & Amazon', 18_000_000, 150_000, 30, { minerals: 4, agriculture: 3 }),
-  p('bra_cw', 'bra', 'Center-West', 17_000_000, 200_000, 45, { agriculture: 8 }),
+  // ─── Germany ───
+  { id: 'deu_n', countryId: 'deu', name: 'North Germany', pop: 25_000_000, terrain: 'plains', isCoastal: true, dev: 82,
+    resources: { food: 20, electronics: 30, money: 350 }, buildings: { navalBase: 1 },
+    adjacent: ['deu_s', 'deu_e', 'deu_w', 'pol_n'] },
+  { id: 'deu_s', countryId: 'deu', name: 'South Germany', pop: 30_000_000, terrain: 'forest', isCoastal: false, dev: 88,
+    resources: { metal: 25, electronics: 40, money: 450 }, buildings: { tankFactory: 1 },
+    adjacent: ['deu_n', 'deu_e', 'deu_w', 'fra_e', 'ita_n'] },
+  { id: 'deu_e', countryId: 'deu', name: 'East Germany', pop: 16_000_000, terrain: 'plains', isCoastal: false, dev: 72,
+    resources: { food: 20, metal: 15, money: 200 },
+    adjacent: ['deu_n', 'deu_s', 'pol_c', 'rus_w'] },
+  { id: 'deu_w', countryId: 'deu', name: 'West Germany', pop: 12_000_000, terrain: 'urban', isCoastal: false, dev: 80,
+    resources: { electronics: 20, money: 300 },
+    adjacent: ['deu_n', 'deu_s', 'fra_n'] },
 
-  // South Korea
-  p('kor_c', 'kor', 'Capital Region', 26_000_000, 1_000_000, 92),
-  p('kor_s', 'kor', 'Gyeongsang', 13_000_000, 450_000, 80, { minerals: 3 }),
-  p('kor_w', 'kor', 'Chungcheong', 13_000_000, 350_000, 75),
+  // ─── Japan ───
+  { id: 'jpn_k', countryId: 'jpn', name: 'Kantō', pop: 44_000_000, terrain: 'urban', isCoastal: true, dev: 95,
+    resources: { electronics: 70, money: 600 }, buildings: { aircraftFactory: 1, navalBase: 1 },
+    adjacent: ['jpn_kn', 'jpn_c'] },
+  { id: 'jpn_kn', countryId: 'jpn', name: 'Kansai', pop: 22_000_000, terrain: 'urban', isCoastal: true, dev: 88,
+    resources: { electronics: 40, money: 350 },
+    adjacent: ['jpn_k', 'jpn_c', 'jpn_s'] },
+  { id: 'jpn_c', countryId: 'jpn', name: 'Chūbu', pop: 22_000_000, terrain: 'mountain', isCoastal: true, dev: 82,
+    resources: { metal: 15, electronics: 25, money: 280 },
+    adjacent: ['jpn_k', 'jpn_kn', 'jpn_n'] },
+  { id: 'jpn_s', countryId: 'jpn', name: 'Kyūshū', pop: 20_000_000, terrain: 'coastal', isCoastal: true, dev: 75,
+    resources: { food: 20, money: 180 }, buildings: { navalBase: 1 },
+    adjacent: ['jpn_kn'] },
+  { id: 'jpn_n', countryId: 'jpn', name: 'Hokkaido', pop: 17_000_000, terrain: 'arctic', isCoastal: true, dev: 70,
+    resources: { food: 40, metal: 10, money: 120 },
+    adjacent: ['jpn_c'] },
 
-  // Turkey
-  p('tur_m', 'tur', 'Marmara', 25_000_000, 350_000, 70),
-  p('tur_a', 'tur', 'Anatolia', 35_000_000, 300_000, 50, { agriculture: 6, minerals: 4 }),
-  p('tur_e', 'tur', 'Eastern Turkey', 24_000_000, 250_000, 40, { minerals: 3 }),
+  // ─── India ───
+  { id: 'ind_n', countryId: 'ind', name: 'North India', pop: 450_000_000, terrain: 'plains', isCoastal: false, dev: 45,
+    resources: { food: 80, metal: 15, money: 200 }, buildings: { barracks: 2 },
+    adjacent: ['ind_c', 'ind_w', 'ind_e', 'chn_w'] },
+  { id: 'ind_s', countryId: 'ind', name: 'South India', pop: 300_000_000, terrain: 'coastal', isCoastal: true, dev: 55,
+    resources: { food: 40, electronics: 20, money: 250 },
+    adjacent: ['ind_c', 'ind_w', 'ind_e'] },
+  { id: 'ind_w', countryId: 'ind', name: 'West India', pop: 280_000_000, terrain: 'coastal', isCoastal: true, dev: 52,
+    resources: { oil: 15, food: 30, money: 220 }, buildings: { navalBase: 1 },
+    adjacent: ['ind_n', 'ind_s', 'ind_c'] },
+  { id: 'ind_e', countryId: 'ind', name: 'East India', pop: 250_000_000, terrain: 'forest', isCoastal: true, dev: 40,
+    resources: { food: 50, metal: 35, money: 150 },
+    adjacent: ['ind_n', 'ind_s', 'ind_c'] },
+  { id: 'ind_c', countryId: 'ind', name: 'Central India', pop: 100_000_000, terrain: 'plains', isCoastal: false, dev: 35,
+    resources: { metal: 30, food: 40, money: 100 },
+    adjacent: ['ind_n', 'ind_s', 'ind_w', 'ind_e'] },
 
-  // Saudi Arabia
-  p('sau_c', 'sau', 'Central (Riyadh)', 10_000_000, 400_000, 70),
-  p('sau_e', 'sau', 'Eastern Province', 5_000_000, 500_000, 75, { oil: 10 }),
-  p('sau_w', 'sau', 'Western (Hejaz)', 12_000_000, 150_000, 55),
-  p('sau_s', 'sau', 'Southern', 8_000_000, 50_000, 40),
+  // ─── Brazil ───
+  { id: 'bra_se', countryId: 'bra', name: 'Southeast', pop: 90_000_000, terrain: 'urban', isCoastal: true, dev: 65,
+    resources: { food: 20, metal: 20, money: 300 }, buildings: { barracks: 1 },
+    adjacent: ['bra_ne', 'bra_s', 'bra_cw'] },
+  { id: 'bra_ne', countryId: 'bra', name: 'Northeast', pop: 57_000_000, terrain: 'plains', isCoastal: true, dev: 40,
+    resources: { food: 40, money: 100 },
+    adjacent: ['bra_se', 'bra_n'] },
+  { id: 'bra_s', countryId: 'bra', name: 'South', pop: 30_000_000, terrain: 'plains', isCoastal: true, dev: 60,
+    resources: { food: 60, money: 150 },
+    adjacent: ['bra_se', 'bra_cw'] },
+  { id: 'bra_n', countryId: 'bra', name: 'North & Amazon', pop: 18_000_000, terrain: 'forest', isCoastal: true, dev: 30,
+    resources: { food: 20, metal: 30, money: 50 },
+    adjacent: ['bra_ne', 'bra_cw'] },
+  { id: 'bra_cw', countryId: 'bra', name: 'Center-West', pop: 17_000_000, terrain: 'plains', isCoastal: false, dev: 45,
+    resources: { food: 70, money: 80 },
+    adjacent: ['bra_se', 'bra_s', 'bra_n'] },
 
-  // Australia
-  p('aus_nsw', 'aus', 'New South Wales', 8_000_000, 600_000, 80),
-  p('aus_vic', 'aus', 'Victoria', 6_500_000, 450_000, 78),
-  p('aus_qld', 'aus', 'Queensland', 5_200_000, 350_000, 70, { minerals: 6 }),
-  p('aus_wa', 'aus', 'Western Australia', 2_700_000, 250_000, 65, { minerals: 9, oil: 3 }),
-  p('aus_sa', 'aus', 'South Australia & NT', 2_600_000, 150_000, 55, { minerals: 5 }),
+  // ─── South Korea ───
+  { id: 'kor_c', countryId: 'kor', name: 'Capital Region', pop: 26_000_000, terrain: 'urban', isCoastal: true, dev: 92,
+    resources: { electronics: 60, money: 400 }, buildings: { barracks: 2, aircraftFactory: 1 },
+    adjacent: ['kor_s', 'kor_w', 'chn_e'] },
+  { id: 'kor_s', countryId: 'kor', name: 'Gyeongsang', pop: 13_000_000, terrain: 'coastal', isCoastal: true, dev: 80,
+    resources: { metal: 25, electronics: 20, money: 200 }, buildings: { navalBase: 1 },
+    adjacent: ['kor_c', 'kor_w'] },
+  { id: 'kor_w', countryId: 'kor', name: 'Chungcheong', pop: 13_000_000, terrain: 'plains', isCoastal: false, dev: 75,
+    resources: { food: 30, metal: 15, money: 150 },
+    adjacent: ['kor_c', 'kor_s'] },
 
-  // Canada
-  p('can_on', 'can', 'Ontario', 14_700_000, 850_000, 80),
-  p('can_qc', 'can', 'Quebec', 8_600_000, 400_000, 72),
-  p('can_bc', 'can', 'British Columbia', 5_100_000, 350_000, 78, { minerals: 4 }),
-  p('can_ab', 'can', 'Alberta', 4_400_000, 350_000, 75, { oil: 9 }),
-  p('can_pr', 'can', 'Prairies & North', 5_200_000, 150_000, 55, { agriculture: 7, minerals: 3 }),
+  // ─── Turkey ───
+  { id: 'tur_m', countryId: 'tur', name: 'Marmara', pop: 25_000_000, terrain: 'coastal', isCoastal: true, dev: 70,
+    resources: { food: 15, money: 200 }, buildings: { barracks: 1, navalBase: 1 },
+    adjacent: ['tur_a'] },
+  { id: 'tur_a', countryId: 'tur', name: 'Anatolia', pop: 35_000_000, terrain: 'plains', isCoastal: false, dev: 50,
+    resources: { food: 50, metal: 30, money: 120 },
+    adjacent: ['tur_m', 'tur_e'] },
+  { id: 'tur_e', countryId: 'tur', name: 'Eastern Turkey', pop: 24_000_000, terrain: 'mountain', isCoastal: false, dev: 40,
+    resources: { metal: 25, oil: 10, money: 80 },
+    adjacent: ['tur_a', 'rus_s', 'irn_w'] },
 
-  // Italy
-  p('ita_n', 'ita', 'Northern Italy', 28_000_000, 1_100_000, 80),
-  p('ita_c', 'ita', 'Central Italy', 12_000_000, 500_000, 72, { agriculture: 5 }),
-  p('ita_s', 'ita', 'Southern Italy', 20_000_000, 500_000, 55, { agriculture: 6 }),
+  // ─── Saudi Arabia ───
+  { id: 'sau_c', countryId: 'sau', name: 'Central (Riyadh)', pop: 10_000_000, terrain: 'desert', isCoastal: false, dev: 70,
+    resources: { oil: 30, money: 250 }, buildings: { barracks: 1 },
+    adjacent: ['sau_e', 'sau_w', 'sau_s'] },
+  { id: 'sau_e', countryId: 'sau', name: 'Eastern Province', pop: 5_000_000, terrain: 'desert', isCoastal: true, dev: 75,
+    resources: { oil: 100, money: 400 }, buildings: { navalBase: 1 },
+    adjacent: ['sau_c', 'irn_s'] },
+  { id: 'sau_w', countryId: 'sau', name: 'Western (Hejaz)', pop: 12_000_000, terrain: 'desert', isCoastal: true, dev: 55,
+    resources: { food: 5, money: 100 },
+    adjacent: ['sau_c', 'sau_s', 'egy_s'] },
+  { id: 'sau_s', countryId: 'sau', name: 'Southern', pop: 8_000_000, terrain: 'desert', isCoastal: true, dev: 40,
+    resources: { food: 10, money: 50 },
+    adjacent: ['sau_c', 'sau_w'] },
 
-  // Iran
-  p('irn_c', 'irn', 'Central Iran', 30_000_000, 150_000, 45, { oil: 4 }),
-  p('irn_w', 'irn', 'Western Iran', 25_000_000, 100_000, 35, { oil: 7 }),
-  p('irn_e', 'irn', 'Eastern Iran', 15_000_000, 80_000, 30, { minerals: 4 }),
-  p('irn_s', 'irn', 'Southern Iran', 15_000_000, 70_000, 32, { oil: 8 }),
+  // ─── Australia ───
+  { id: 'aus_nsw', countryId: 'aus', name: 'New South Wales', pop: 8_000_000, terrain: 'coastal', isCoastal: true, dev: 80,
+    resources: { food: 20, electronics: 15, money: 300 }, buildings: { navalBase: 1 },
+    adjacent: ['aus_vic', 'aus_qld', 'aus_sa'] },
+  { id: 'aus_vic', countryId: 'aus', name: 'Victoria', pop: 6_500_000, terrain: 'plains', isCoastal: true, dev: 78,
+    resources: { food: 25, money: 250 },
+    adjacent: ['aus_nsw', 'aus_sa'] },
+  { id: 'aus_qld', countryId: 'aus', name: 'Queensland', pop: 5_200_000, terrain: 'desert', isCoastal: true, dev: 70,
+    resources: { metal: 50, food: 15, money: 180 },
+    adjacent: ['aus_nsw', 'aus_sa', 'aus_wa'] },
+  { id: 'aus_wa', countryId: 'aus', name: 'Western Australia', pop: 2_700_000, terrain: 'desert', isCoastal: true, dev: 65,
+    resources: { metal: 80, oil: 20, money: 150 },
+    adjacent: ['aus_qld', 'aus_sa'] },
+  { id: 'aus_sa', countryId: 'aus', name: 'South Australia & NT', pop: 2_600_000, terrain: 'desert', isCoastal: true, dev: 55,
+    resources: { metal: 40, money: 80 },
+    adjacent: ['aus_nsw', 'aus_vic', 'aus_qld', 'aus_wa'] },
 
-  // Egypt
-  p('egy_n', 'egy', 'Nile Delta', 50_000_000, 200_000, 50, { agriculture: 8 }),
-  p('egy_c', 'egy', 'Cairo Region', 25_000_000, 150_000, 55),
-  p('egy_s', 'egy', 'Upper Egypt', 29_000_000, 50_000, 30, { agriculture: 5 }),
+  // ─── Canada ───
+  { id: 'can_on', countryId: 'can', name: 'Ontario', pop: 14_700_000, terrain: 'forest', isCoastal: true, dev: 80,
+    resources: { food: 20, electronics: 15, money: 350 },
+    adjacent: ['can_qc', 'can_pr', 'usa_mw'] },
+  { id: 'can_qc', countryId: 'can', name: 'Quebec', pop: 8_600_000, terrain: 'forest', isCoastal: true, dev: 72,
+    resources: { food: 15, metal: 10, money: 200 },
+    adjacent: ['can_on', 'can_pr', 'usa_ne'] },
+  { id: 'can_bc', countryId: 'can', name: 'British Columbia', pop: 5_100_000, terrain: 'mountain', isCoastal: true, dev: 78,
+    resources: { metal: 30, food: 10, money: 180 }, buildings: { navalBase: 1 },
+    adjacent: ['can_ab', 'usa_ak', 'usa_w'] },
+  { id: 'can_ab', countryId: 'can', name: 'Alberta', pop: 4_400_000, terrain: 'plains', isCoastal: false, dev: 75,
+    resources: { oil: 80, money: 200 },
+    adjacent: ['can_bc', 'can_pr'] },
+  { id: 'can_pr', countryId: 'can', name: 'Prairies & North', pop: 5_200_000, terrain: 'arctic', isCoastal: true, dev: 55,
+    resources: { food: 50, metal: 20, money: 80 },
+    adjacent: ['can_on', 'can_qc', 'can_ab'] },
 
-  // Israel
-  p('isr_c', 'isr', 'Central District', 5_000_000, 300_000, 85),
-  p('isr_s', 'isr', 'Southern District', 2_000_000, 100_000, 65, { minerals: 3 }),
-  p('isr_n', 'isr', 'Northern District', 2_000_000, 100_000, 70, { agriculture: 4 }),
+  // ─── Italy ───
+  { id: 'ita_n', countryId: 'ita', name: 'Northern Italy', pop: 28_000_000, terrain: 'urban', isCoastal: true, dev: 80,
+    resources: { food: 15, electronics: 20, money: 350 }, buildings: { tankFactory: 1 },
+    adjacent: ['ita_c', 'fra_s', 'deu_s'] },
+  { id: 'ita_c', countryId: 'ita', name: 'Central Italy', pop: 12_000_000, terrain: 'plains', isCoastal: true, dev: 72,
+    resources: { food: 30, money: 200 },
+    adjacent: ['ita_n', 'ita_s'] },
+  { id: 'ita_s', countryId: 'ita', name: 'Southern Italy', pop: 20_000_000, terrain: 'coastal', isCoastal: true, dev: 55,
+    resources: { food: 40, money: 120 }, buildings: { navalBase: 1 },
+    adjacent: ['ita_c'] },
 
-  // Poland
-  p('pol_c', 'pol', 'Central Poland', 12_000_000, 300_000, 68),
-  p('pol_s', 'pol', 'Southern Poland', 12_000_000, 200_000, 62, { minerals: 5 }),
-  p('pol_n', 'pol', 'Northern Poland', 14_000_000, 200_000, 60, { agriculture: 5 }),
+  // ─── Iran ───
+  { id: 'irn_c', countryId: 'irn', name: 'Central Iran', pop: 30_000_000, terrain: 'desert', isCoastal: false, dev: 45,
+    resources: { oil: 30, money: 120 }, buildings: { barracks: 1 },
+    adjacent: ['irn_w', 'irn_e', 'irn_s'] },
+  { id: 'irn_w', countryId: 'irn', name: 'Western Iran', pop: 25_000_000, terrain: 'mountain', isCoastal: false, dev: 35,
+    resources: { oil: 60, metal: 15, money: 80 },
+    adjacent: ['irn_c', 'tur_e'] },
+  { id: 'irn_e', countryId: 'irn', name: 'Eastern Iran', pop: 15_000_000, terrain: 'desert', isCoastal: false, dev: 30,
+    resources: { metal: 30, money: 50 },
+    adjacent: ['irn_c', 'irn_s'] },
+  { id: 'irn_s', countryId: 'irn', name: 'Southern Iran', pop: 15_000_000, terrain: 'coastal', isCoastal: true, dev: 32,
+    resources: { oil: 70, money: 60 }, buildings: { navalBase: 1 },
+    adjacent: ['irn_c', 'irn_e', 'sau_e'] },
 
-  // Mexico
-  p('mex_c', 'mex', 'Central Mexico', 45_000_000, 550_000, 55),
-  p('mex_n', 'mex', 'Northern Mexico', 40_000_000, 450_000, 50, { oil: 3, minerals: 4 }),
-  p('mex_s', 'mex', 'Southern Mexico', 30_000_000, 200_000, 35, { agriculture: 6 }),
-  p('mex_se', 'mex', 'Yucatán & SE', 15_000_000, 100_000, 40, { oil: 5 }),
+  // ─── Egypt ───
+  { id: 'egy_n', countryId: 'egy', name: 'Nile Delta', pop: 50_000_000, terrain: 'plains', isCoastal: true, dev: 50,
+    resources: { food: 70, money: 150 }, buildings: { barracks: 1 },
+    adjacent: ['egy_c', 'isr_s'] },
+  { id: 'egy_c', countryId: 'egy', name: 'Cairo Region', pop: 25_000_000, terrain: 'urban', isCoastal: false, dev: 55,
+    resources: { food: 20, money: 180 },
+    adjacent: ['egy_n', 'egy_s'] },
+  { id: 'egy_s', countryId: 'egy', name: 'Upper Egypt', pop: 29_000_000, terrain: 'desert', isCoastal: false, dev: 30,
+    resources: { food: 40, money: 50 },
+    adjacent: ['egy_c', 'sau_w'] },
+
+  // ─── Israel ───
+  { id: 'isr_c', countryId: 'isr', name: 'Central District', pop: 5_000_000, terrain: 'urban', isCoastal: true, dev: 85,
+    resources: { electronics: 40, money: 300 }, buildings: { aircraftFactory: 1, barracks: 2 },
+    adjacent: ['isr_s', 'isr_n'] },
+  { id: 'isr_s', countryId: 'isr', name: 'Southern District', pop: 2_000_000, terrain: 'desert', isCoastal: false, dev: 65,
+    resources: { metal: 20, money: 80 }, buildings: { fortification: 1 },
+    adjacent: ['isr_c', 'egy_n'] },
+  { id: 'isr_n', countryId: 'isr', name: 'Northern District', pop: 2_000_000, terrain: 'mountain', isCoastal: false, dev: 70,
+    resources: { food: 25, money: 70 }, buildings: { fortification: 1 },
+    adjacent: ['isr_c'] },
+
+  // ─── Poland ───
+  { id: 'pol_c', countryId: 'pol', name: 'Central Poland', pop: 12_000_000, terrain: 'plains', isCoastal: false, dev: 68,
+    resources: { food: 20, metal: 10, money: 180 }, buildings: { barracks: 1 },
+    adjacent: ['pol_s', 'pol_n', 'deu_e'] },
+  { id: 'pol_s', countryId: 'pol', name: 'Southern Poland', pop: 12_000_000, terrain: 'mountain', isCoastal: false, dev: 62,
+    resources: { metal: 40, money: 130 },
+    adjacent: ['pol_c', 'pol_n'] },
+  { id: 'pol_n', countryId: 'pol', name: 'Northern Poland', pop: 14_000_000, terrain: 'plains', isCoastal: true, dev: 60,
+    resources: { food: 35, money: 120 }, buildings: { navalBase: 1 },
+    adjacent: ['pol_c', 'pol_s', 'deu_n', 'rus_w'] },
+
+  // ─── Mexico ───
+  { id: 'mex_c', countryId: 'mex', name: 'Central Mexico', pop: 45_000_000, terrain: 'urban', isCoastal: false, dev: 55,
+    resources: { food: 20, money: 200 }, buildings: { barracks: 1 },
+    adjacent: ['mex_n', 'mex_s', 'mex_se'] },
+  { id: 'mex_n', countryId: 'mex', name: 'Northern Mexico', pop: 40_000_000, terrain: 'desert', isCoastal: true, dev: 50,
+    resources: { oil: 20, metal: 30, money: 150 },
+    adjacent: ['mex_c', 'usa_sw'] },
+  { id: 'mex_s', countryId: 'mex', name: 'Southern Mexico', pop: 30_000_000, terrain: 'forest', isCoastal: true, dev: 35,
+    resources: { food: 45, money: 80 },
+    adjacent: ['mex_c', 'mex_se'] },
+  { id: 'mex_se', countryId: 'mex', name: 'Yucatán & SE', pop: 15_000_000, terrain: 'forest', isCoastal: true, dev: 40,
+    resources: { oil: 40, food: 15, money: 60 },
+    adjacent: ['mex_c', 'mex_s'] },
 ];
+
+export const INITIAL_PROVINCES: Province[] = PROVINCE_DEFS.map(makeProvince);
 
 export function getProvincesForCountry(provinces: Record<string, Province>, countryId: string): Province[] {
   return Object.values(provinces).filter(p => p.countryId === countryId);
