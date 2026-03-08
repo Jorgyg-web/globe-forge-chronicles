@@ -63,9 +63,11 @@ function inferTerrain(lat: number, lng: number): TerrainType {
   if (lat > 27 && lat < 40 && lng > 70 && lng < 100) return 'mountain';
   if (lat > 36 && lat < 48 && lng > 5 && lng < 18) return 'mountain';
   if (lat > -55 && lat < 10 && lng > -80 && lng < -64) return 'mountain';
+  // Jungle: equatorial regions
+  if (lat > -10 && lat < 10 && lng > -80 && lng < -40) return 'jungle';
+  if (lat > -8 && lat < 10 && lng > 95 && lng < 145) return 'jungle';
+  if (lat > -5 && lat < 10 && lng > 10 && lng < 40) return 'jungle';
   if (lat > 50 && lat < 66 && lng > 20 && lng < 180) return 'forest';
-  if (lat > -10 && lat < 10 && lng > -80 && lng < -40) return 'forest';
-  if (lat > -8 && lat < 10 && lng > 95 && lng < 145) return 'forest';
   if (lat > 45 && lat < 60 && lng > -140 && lng < -60) return 'forest';
   return 'plains';
 }
