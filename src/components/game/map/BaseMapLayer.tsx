@@ -1,39 +1,16 @@
-import React, { useEffect, useState, useMemo } from 'react';
-import { polygonToSvgPath, multiPolygonToSvgPath, getDefaultProjectionConfig } from '@/map/projection';
+import React, { useMemo } from 'react';
+import { getCachedWorldData } from '@/map/worldGenerator';
 
 /**
- * Renders world landmass polygons from a simplified GeoJSON file.
- * This layer sits below ProvinceLayer and provides geographic outlines.
+ * Renders world landmass polygons as a base layer below provinces.
+ * Uses pre-parsed country paths from the world generator cache.
  */
 const BaseMapLayer: React.FC = () => {
-  const [landPaths, setLandPaths] = useState<string[]>([]);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch('/data/world-land.geojson')
-      .then(r => r.json())
-      .then(data => {
-        if (cancelled) return;
-        const cfg = getDefaultProjectionConfig();
-        const paths: string[] = [];
-        for (const feature of data.features) {
-          const geo = feature.geometry;
-          let path = '';
-          if (geo.type === 'Polygon') {
-            path = polygonToSvgPath(geo.coordinates, cfg);
-          } else if (geo.type === 'MultiPolygon') {
-            path = multiPolygonToSvgPath(geo.coordinates, cfg);
-          }
-          if (path) paths.push(path);
-        }
-        setLandPaths(paths);
-      })
-      .catch(() => {/* silently fall back to no base map */});
-    return () => { cancelled = true; };
+  const combinedPath = useMemo(() => {
+    const worldData = getCachedWorldData();
+    if (!worldData) return '';
+    return Object.values(worldData.countryPaths).join(' ');
   }, []);
-
-  // Combine all paths into a single <path> for performance
-  const combinedPath = useMemo(() => landPaths.join(' '), [landPaths]);
 
   if (!combinedPath) return null;
 
