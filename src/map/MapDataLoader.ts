@@ -28,7 +28,7 @@ import {
   ProjectionConfig,
   getDefaultProjectionConfig,
 } from './projection';
-import { computeCentroid, computeBounds } from '@/data/provinceGeometry';
+import { computeCentroid, computeBounds, updateProvinceGeometry, invalidateCentroidCache } from '@/data/provinceGeometry';
 import { Province } from '@/types/game';
 
 export class MapDataLoader {
@@ -216,6 +216,8 @@ export function applyGeometriesToProvinces(
   for (const [id, geo] of geometries) {
     if (updated[id]) {
       updated[id] = { ...updated[id], geometry: geo.svgPath };
+      // Sync the geometry lookup table + invalidate centroid cache
+      updateProvinceGeometry(id, geo.svgPath);
       applied++;
     } else {
       console.warn(`[MapDataLoader] GeoJSON province "${id}" has no matching game province`);
@@ -223,6 +225,7 @@ export function applyGeometriesToProvinces(
     }
   }
 
+  if (applied > 0) invalidateCentroidCache();
   console.log(`[MapDataLoader] Applied ${applied} geometries, ${missing} unmatched, ${Object.keys(provinces).length - applied} provinces kept existing geometry`);
   return updated;
 }
