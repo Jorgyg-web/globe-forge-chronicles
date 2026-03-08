@@ -207,11 +207,21 @@ export function processAction(state: GameState, action: GameAction): GameState {
       if (!prov) return state;
       const current = prov.infrastructure[action.infra];
       if (current >= 10) return state;
-      return updateProvince(state, action.provinceId, p => ({
-        ...p,
-        infrastructure: { ...p.infrastructure, [action.infra]: current + 1 },
-        development: Math.min(100, p.development + 1),
-      }));
+      const cost = current * 150;
+      const turnsRequired = Math.max(2, current + 1);
+      const item: ConstructionItem = {
+        id: `build_${state.turn}_${action.provinceId}_${action.infra}_${Date.now()}`,
+        countryId: prov.countryId,
+        provinceId: action.provinceId,
+        category: 'infrastructure',
+        type: action.infra,
+        label: `${action.infra} → Lv.${current + 1}`,
+        cost,
+        turnsRequired,
+        turnsRemaining: turnsRequired,
+        startedTurn: state.turn,
+      };
+      return { ...state, constructionQueue: [...state.constructionQueue, item] };
     }
 
     case 'UPGRADE_PROVINCE_INDUSTRY': {
@@ -219,20 +229,41 @@ export function processAction(state: GameState, action: GameAction): GameState {
       if (!prov) return state;
       const current = prov.industry[action.industry];
       if (current >= 10) return state;
-      return updateProvince(state, action.provinceId, p => ({
-        ...p,
-        industry: { ...p.industry, [action.industry]: current + 1 },
-        development: Math.min(100, p.development + 1),
-      }));
+      const cost = current * 200;
+      const turnsRequired = Math.max(2, current + 1);
+      const item: ConstructionItem = {
+        id: `build_${state.turn}_${action.provinceId}_${action.industry}_${Date.now()}`,
+        countryId: prov.countryId,
+        provinceId: action.provinceId,
+        category: 'industry',
+        type: action.industry,
+        label: `${action.industry} → Lv.${current + 1}`,
+        cost,
+        turnsRequired,
+        turnsRemaining: turnsRequired,
+        startedTurn: state.turn,
+      };
+      return { ...state, constructionQueue: [...state.constructionQueue, item] };
     }
 
     case 'BUILD_PROVINCE_BASE': {
       const prov = state.provinces[action.provinceId];
       if (!prov) return state;
-      return updateProvince(state, action.provinceId, p => ({
-        ...p,
-        military: { ...p.military, bases: p.military.bases + 1 },
-      }));
+      const cost = 500;
+      const turnsRequired = 4;
+      const item: ConstructionItem = {
+        id: `build_${state.turn}_${action.provinceId}_base_${Date.now()}`,
+        countryId: prov.countryId,
+        provinceId: action.provinceId,
+        category: 'military',
+        type: 'base',
+        label: `Military Base`,
+        cost,
+        turnsRequired,
+        turnsRemaining: turnsRequired,
+        startedTurn: state.turn,
+      };
+      return { ...state, constructionQueue: [...state.constructionQueue, item] };
     }
 
     case 'GARRISON_PROVINCE': {
@@ -242,6 +273,10 @@ export function processAction(state: GameState, action: GameAction): GameState {
         ...p,
         military: { ...p.military, garrison: p.military.garrison + action.troops },
       }));
+    }
+
+    case 'CANCEL_CONSTRUCTION': {
+      return { ...state, constructionQueue: state.constructionQueue.filter(i => i.id !== action.itemId) };
     }
 
     case 'NEXT_TURN':
