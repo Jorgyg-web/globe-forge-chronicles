@@ -29,7 +29,9 @@ const WorldMap = () => {
 
   const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
-    setZoom(prev => Math.min(5, Math.max(0.5, prev + (e.deltaY > 0 ? -0.15 : 0.15))));
+    e.stopPropagation();
+    const delta = e.deltaY > 0 ? -0.25 : 0.25;
+    setZoom(prev => Math.min(5, Math.max(0.5, prev + delta)));
   }, []);
 
   useEffect(() => {
