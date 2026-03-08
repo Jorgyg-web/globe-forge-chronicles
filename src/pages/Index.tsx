@@ -52,10 +52,12 @@ const GameContent = () => {
   );
 };
 
-const Index = () => (
-  <GameProvider>
-    <GameContent />
-  </GameProvider>
-);
+const Index = () => {
+  return (
+    <GameProvider>
+      <GameContent />
+    </GameProvider>
+  );
+};
 
 export default Index;
