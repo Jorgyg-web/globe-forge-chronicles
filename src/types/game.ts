@@ -297,6 +297,7 @@ export type GameAction =
   | { type: 'UPGRADE_PROVINCE_INDUSTRY'; provinceId: ProvinceId; industry: keyof ProvinceIndustry }
   | { type: 'BUILD_PROVINCE_BASE'; provinceId: ProvinceId }
   | { type: 'GARRISON_PROVINCE'; provinceId: ProvinceId; troops: number }
+  | { type: 'CANCEL_CONSTRUCTION'; itemId: string }
   | { type: 'NEXT_TURN' }
   | { type: 'SET_SPEED'; speed: GameSpeed }
   | { type: 'TOGGLE_PAUSE' };
