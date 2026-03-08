@@ -116,7 +116,7 @@ const ArmyLayer: React.FC = () => {
       })}
 
       {/* Stationary armies */}
-      {armyPositions.filter(a => !a.army.targetProvinceId).map(({ army, x, y }) => {
+      {showArmies && armyPositions.filter(a => !a.army.targetProvinceId).map(({ army, x, y }) => {
         const totalUnits = army.units.reduce((s, u) => s + u.count, 0);
         const isPlayer = army.countryId === state.playerCountryId;
         const isSelected = selectedArmyId === army.id;
