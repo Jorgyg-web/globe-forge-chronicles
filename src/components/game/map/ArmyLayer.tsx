@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { useGame } from '@/context/GameContext';
+import { useMapContext } from './MapContext';
 import { Army } from '@/types/game';
 import { getProvinceCentroid } from '@/data/provinceGeometry';
 import { UNIT_STATS } from '@/data/unitStats';
@@ -31,6 +32,9 @@ function getDominantUnitIcon(army: Army): string {
 
 const ArmyLayer: React.FC = () => {
   const { state, selectedArmyId, setSelectedArmyId, setActivePanel } = useGame();
+  const { zoom } = useMapContext();
+  const showArmies = zoom >= 1.5;
+  const showMovement = zoom >= 1.2;
 
   const armyPositions = useMemo(() => {
     const positions: { army: Army; x: number; y: number; targetX?: number; targetY?: number }[] = [];
@@ -62,7 +66,7 @@ const ArmyLayer: React.FC = () => {
   return (
     <>
       {/* Movement arrows with ETA */}
-      {armyPositions.filter(a => a.targetX != null).map(({ army, x, y, targetX, targetY }) => {
+      {showMovement && armyPositions.filter(a => a.targetX != null).map(({ army, x, y, targetX, targetY }) => {
         if (!targetX || !targetY) return null;
         const isPlayer = army.countryId === state.playerCountryId;
         const cx = x + (targetX - x) * army.movementProgress;
@@ -112,7 +116,7 @@ const ArmyLayer: React.FC = () => {
       })}
 
       {/* Stationary armies */}
-      {armyPositions.filter(a => !a.army.targetProvinceId).map(({ army, x, y }) => {
+      {showArmies && armyPositions.filter(a => !a.army.targetProvinceId).map(({ army, x, y }) => {
         const totalUnits = army.units.reduce((s, u) => s + u.count, 0);
         const isPlayer = army.countryId === state.playerCountryId;
         const isSelected = selectedArmyId === army.id;

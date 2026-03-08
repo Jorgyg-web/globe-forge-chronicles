@@ -1,5 +1,6 @@
 import React, { useMemo, useCallback } from 'react';
 import { useGame } from '@/context/GameContext';
+
 import { useMapContext } from './MapContext';
 import { getProvinceCentroid, computeBounds } from '@/data/provinceGeometry';
 import { StaticGeometryLayer, CachedProvinceData } from './ProvincePathCache';
@@ -8,7 +9,7 @@ import { ProvinceOverlayLayer } from './ProvinceOverlayLayer';
 
 const ProvinceLayer: React.FC = () => {
   const { state, selectedCountryId, selectedProvinceId, setSelectedCountryId, setSelectedProvinceId, selectedArmyId, setActivePanel, dispatch } = useGame();
-  const { showDetails, moveMode, moveTargets, setHoveredCountry, setHoveredProvince } = useMapContext();
+  const { zoom, moveMode, moveTargets, setHoveredCountry, setHoveredProvince } = useMapContext();
 
   // Cache province render data — only recomputes when provinces or countries change
   const cachedProvinces: CachedProvinceData[] = useMemo(() => {
@@ -113,7 +114,7 @@ const ProvinceLayer: React.FC = () => {
         selectedProvinceId={selectedProvinceId}
         selectedCountryId={selectedCountryId}
         moveTargets={moveTargets}
-        showDetails={showDetails}
+        zoom={zoom}
         troopCounts={troopCounts}
       />
 
