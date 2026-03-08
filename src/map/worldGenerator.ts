@@ -118,7 +118,7 @@ export interface WorldData {
  * Load the Natural Earth Admin-1 dataset and generate countries + provinces.
  */
 export async function generateWorld(): Promise<WorldData> {
-  const response = await fetch('/data/ne_50m_admin_1.geojson');
+  const response = await fetch('/data/ne_110m_admin_1.geojson');
   const geojson = await response.json();
   const cfg = getDefaultProjectionConfig();
 
