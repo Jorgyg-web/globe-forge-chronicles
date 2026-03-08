@@ -2,7 +2,7 @@ import { useGame } from '@/context/GameContext';
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 import { getProvincesForCountry } from '@/data/provinces';
-import { Province } from '@/types/game';
+import { Province, Army } from '@/types/game';
 
 const COUNTRY_POSITIONS: Record<string, { x: number; y: number; w: number; h: number }> = {
   usa: { x: 80, y: 140, w: 120, h: 60 },
@@ -27,28 +27,20 @@ const COUNTRY_POSITIONS: Record<string, { x: number; y: number; w: number; h: nu
   aus: { x: 620, y: 330, w: 90, h: 60 },
 };
 
-// Generate province sub-rects within the country bounds
-function getProvinceLayout(provinces: Province[], countryPos: { x: number; y: number; w: number; h: number }) {
+function getProvinceLayout(provinces: Province[], pos: { x: number; y: number; w: number; h: number }) {
   const count = provinces.length;
   if (count === 0) return [];
-  
-  // Arrange in a grid pattern
   const cols = count <= 3 ? count : count <= 6 ? 3 : 4;
   const rows = Math.ceil(count / cols);
-  const cellW = countryPos.w / cols;
-  const cellH = countryPos.h / rows;
-  
-  return provinces.map((prov, i) => {
-    const col = i % cols;
-    const row = Math.floor(i / cols);
-    return {
-      province: prov,
-      x: countryPos.x + col * cellW + 0.5,
-      y: countryPos.y + row * cellH + 0.5,
-      w: cellW - 1,
-      h: cellH - 1,
-    };
-  });
+  const cellW = pos.w / cols;
+  const cellH = pos.h / rows;
+  return provinces.map((prov, i) => ({
+    province: prov,
+    x: pos.x + (i % cols) * cellW + 0.5,
+    y: pos.y + Math.floor(i / cols) * cellH + 0.5,
+    w: cellW - 1,
+    h: cellH - 1,
+  }));
 }
 
 const WorldMap = () => {
@@ -66,94 +58,71 @@ const WorldMap = () => {
 
   const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
-    const delta = e.deltaY > 0 ? -0.1 : 0.1;
-    setZoom(prev => Math.min(4, Math.max(0.5, prev + delta)));
+    setZoom(prev => Math.min(4, Math.max(0.5, prev + (e.deltaY > 0 ? -0.1 : 0.1))));
   }, []);
 
   useEffect(() => {
     const el = containerRef.current;
-    if (el) {
-      el.addEventListener('wheel', handleWheel, { passive: false });
-      return () => el.removeEventListener('wheel', handleWheel);
-    }
+    if (el) { el.addEventListener('wheel', handleWheel, { passive: false }); return () => el.removeEventListener('wheel', handleWheel); }
   }, [handleWheel]);
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.button === 0) {
-      setIsPanning(true);
-      setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
-    }
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    setMousePos({ x: e.clientX, y: e.clientY });
-    if (isPanning) {
-      setPan({ x: e.clientX - panStart.x, y: e.clientY - panStart.y });
-    }
-  };
-
+  const handleMouseDown = (e: React.MouseEvent) => { if (e.button === 0) { setIsPanning(true); setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y }); } };
+  const handleMouseMove = (e: React.MouseEvent) => { setMousePos({ x: e.clientX, y: e.clientY }); if (isPanning) setPan({ x: e.clientX - panStart.x, y: e.clientY - panStart.y }); };
   const handleMouseUp = () => setIsPanning(false);
-
   const resetView = () => { setZoom(1); setPan({ x: 0, y: 0 }); };
 
   const handleProvinceClick = (provId: string, countryId: string) => {
-    setSelectedCountryId(countryId);
-    setSelectedProvinceId(provId);
-    setActivePanel('province');
+    setSelectedCountryId(countryId); setSelectedProvinceId(provId); setActivePanel('province');
   };
 
-  // Memoize province layouts for all countries
   const provinceLayouts = useMemo(() => {
     const layouts: Record<string, ReturnType<typeof getProvinceLayout>> = {};
     for (const cId of Object.keys(state.countries)) {
       const pos = COUNTRY_POSITIONS[cId];
       if (!pos) continue;
       const provs = getProvincesForCountry(state.provinces, cId);
-      if (provs.length > 0) {
-        layouts[cId] = getProvinceLayout(provs, pos);
-      }
+      if (provs.length > 0) layouts[cId] = getProvinceLayout(provs, pos);
     }
     return layouts;
   }, [state.countries, state.provinces]);
+
+  // Armies on map
+  const armyPositions = useMemo(() => {
+    const positions: { army: Army; x: number; y: number }[] = [];
+    for (const army of Object.values(state.armies)) {
+      const prov = state.provinces[army.provinceId];
+      if (!prov) continue;
+      const countryPos = COUNTRY_POSITIONS[prov.countryId];
+      if (!countryPos) continue;
+      const layout = provinceLayouts[prov.countryId];
+      const provLayout = layout?.find(l => l.province.id === prov.id);
+      if (provLayout) {
+        positions.push({ army, x: provLayout.x + provLayout.w / 2, y: provLayout.y + provLayout.h / 2 });
+      } else {
+        positions.push({ army, x: countryPos.x + countryPos.w / 2, y: countryPos.y + countryPos.h / 2 });
+      }
+    }
+    return positions;
+  }, [state.armies, state.provinces, provinceLayouts]);
 
   const hoveredData = hoveredCountry ? state.countries[hoveredCountry] : null;
   const hoveredProvData = hoveredProvince ? state.provinces[hoveredProvince] : null;
 
   return (
-    <div
-      ref={containerRef}
-      className="relative w-full h-full overflow-hidden select-none"
+    <div ref={containerRef} className="relative w-full h-full overflow-hidden select-none"
       style={{ background: 'hsl(var(--map-water))' }}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
-    >
-      <div className="absolute inset-0 pointer-events-none z-10" style={{
-        background: 'radial-gradient(ellipse at center, transparent 50%, hsl(var(--background) / 0.4) 100%)'
-      }} />
+      onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}>
+      <div className="absolute inset-0 pointer-events-none z-10" style={{ background: 'radial-gradient(ellipse at center, transparent 50%, hsl(var(--background) / 0.4) 100%)' }} />
 
-      <svg
-        viewBox="0 0 800 450"
-        className="w-full h-full"
-        preserveAspectRatio="xMidYMid meet"
-        style={{
-          transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px)`,
-          transition: isPanning ? 'none' : 'transform 0.2s ease-out',
-          cursor: isPanning ? 'grabbing' : 'grab',
-        }}
-      >
+      <svg viewBox="0 0 800 450" className="w-full h-full" preserveAspectRatio="xMidYMid meet"
+        style={{ transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px)`, transition: isPanning ? 'none' : 'transform 0.2s ease-out', cursor: isPanning ? 'grabbing' : 'grab' }}>
         <defs>
-          <filter id="glow">
-            <feGaussianBlur stdDeviation="3" result="blur" />
-            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
-          </filter>
+          <filter id="glow"><feGaussianBlur stdDeviation="3" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
           <pattern id="gridPattern" width="25" height="25" patternUnits="userSpaceOnUse">
             <line x1="25" y1="0" x2="25" y2="25" stroke="hsl(225, 18%, 16%)" strokeWidth="0.3" opacity="0.2" />
             <line x1="0" y1="25" x2="25" y2="25" stroke="hsl(225, 18%, 16%)" strokeWidth="0.3" opacity="0.2" />
           </pattern>
         </defs>
-
         <rect width="800" height="450" fill="url(#gridPattern)" />
 
         {/* Continent shapes */}
@@ -164,7 +133,7 @@ const WorldMap = () => {
         <path d="M470,40 L720,30 L730,160 L700,200 L620,220 L540,260 L490,230 L470,170 Z" fill="hsl(var(--map-land))" stroke="hsl(var(--map-border))" strokeWidth="0.5" opacity={0.25} />
         <path d="M610,310 L720,300 L730,370 L680,400 L620,390 Z" fill="hsl(var(--map-land))" stroke="hsl(var(--map-border))" strokeWidth="0.5" opacity={0.25} />
 
-        {/* Country markers */}
+        {/* Countries */}
         {Object.values(state.countries).map(country => {
           const pos = COUNTRY_POSITIONS[country.id];
           if (!pos) return null;
@@ -176,33 +145,25 @@ const WorldMap = () => {
 
           return (
             <g key={country.id}>
-              {/* Country selection glow */}
-              {isSelected && (
-                <rect x={pos.x - 3} y={pos.y - 3} width={pos.w + 6} height={pos.h + 6} rx={5}
-                  fill="none" stroke="hsl(var(--primary))" strokeWidth="1" opacity={0.3} filter="url(#glow)" />
-              )}
+              {isSelected && <rect x={pos.x - 3} y={pos.y - 3} width={pos.w + 6} height={pos.h + 6} rx={5} fill="none" stroke="hsl(var(--primary))" strokeWidth="1" opacity={0.3} filter="url(#glow)" />}
 
-              {/* Province sub-rects when zoomed */}
               {showProvinces && layout ? (
                 <>
-                  {/* Country background */}
-                  <rect x={pos.x} y={pos.y} width={pos.w} height={pos.h} rx={4}
-                    fill={country.color} opacity={0.15}
-                    stroke={isSelected ? 'hsl(var(--primary))' : isAtWar ? 'hsl(var(--danger))' : 'hsl(var(--map-border))'}
-                    strokeWidth={isSelected ? 1.5 : 0.5} />
+                  <rect x={pos.x} y={pos.y} width={pos.w} height={pos.h} rx={4} fill={country.color} opacity={0.15}
+                    stroke={isSelected ? 'hsl(var(--primary))' : isAtWar ? 'hsl(var(--danger))' : 'hsl(var(--map-border))'} strokeWidth={isSelected ? 1.5 : 0.5} />
                   {layout.map(({ province: prov, x, y, w, h }) => {
                     const isProvSelected = selectedProvinceId === prov.id;
                     const isProvHovered = hoveredProvince === prov.id;
                     const devOpacity = 0.2 + (prov.development / 100) * 0.4;
+                    const owner = state.countries[prov.countryId];
                     return (
                       <g key={prov.id}
-                        onClick={(e) => { e.stopPropagation(); handleProvinceClick(prov.id, country.id); }}
+                        onClick={(e) => { e.stopPropagation(); handleProvinceClick(prov.id, prov.countryId); }}
                         onMouseEnter={() => { setHoveredProvince(prov.id); setHoveredCountry(country.id); }}
                         onMouseLeave={() => { setHoveredProvince(null); setHoveredCountry(null); }}
-                        className="cursor-pointer"
-                      >
+                        className="cursor-pointer">
                         <rect x={x} y={y} width={w} height={h} rx={2}
-                          fill={isProvSelected ? 'hsl(var(--primary))' : country.color}
+                          fill={isProvSelected ? 'hsl(var(--primary))' : (owner?.color ?? country.color)}
                           opacity={isProvSelected ? 0.6 : isProvHovered ? 0.5 : devOpacity}
                           stroke={isProvSelected ? 'hsl(var(--primary))' : isProvHovered ? 'hsl(var(--foreground))' : 'hsl(var(--map-border))'}
                           strokeWidth={isProvSelected ? 1.5 : isProvHovered ? 0.8 : 0.3}
@@ -211,8 +172,7 @@ const WorldMap = () => {
                           <text x={x + w / 2} y={y + h / 2} textAnchor="middle" dominantBaseline="middle"
                             fontSize={Math.min(6, w / 5)} fill="hsl(var(--foreground))"
                             fontFamily="'JetBrains Mono', monospace" fontWeight={isProvSelected ? 700 : 400}
-                            opacity={isProvHovered || isProvSelected ? 1 : 0.6}
-                            style={{ pointerEvents: 'none' }}>
+                            opacity={isProvHovered || isProvSelected ? 1 : 0.6} style={{ pointerEvents: 'none' }}>
                             {prov.name.length > 8 ? prov.name.slice(0, 7) + '…' : prov.name}
                           </text>
                         )}
@@ -221,13 +181,9 @@ const WorldMap = () => {
                   })}
                 </>
               ) : (
-                /* Normal country rect when not zoomed enough */
-                <g
-                  onClick={(e) => { e.stopPropagation(); setSelectedCountryId(country.id); }}
-                  onMouseEnter={() => setHoveredCountry(country.id)}
-                  onMouseLeave={() => setHoveredCountry(null)}
-                  className="cursor-pointer"
-                >
+                <g onClick={(e) => { e.stopPropagation(); setSelectedCountryId(country.id); }}
+                  onMouseEnter={() => setHoveredCountry(country.id)} onMouseLeave={() => setHoveredCountry(null)}
+                  className="cursor-pointer">
                   <rect x={pos.x} y={pos.y} width={pos.w} height={pos.h} rx={4}
                     fill={isSelected ? 'hsl(var(--primary))' : isHovered ? 'hsl(var(--map-land-hover))' : country.color}
                     opacity={isSelected ? 0.5 : isHovered ? 0.65 : 0.35}
@@ -237,106 +193,82 @@ const WorldMap = () => {
                   <text x={pos.x + pos.w / 2} y={pos.y + pos.h / 2 + 1} textAnchor="middle" dominantBaseline="middle"
                     fontSize={pos.w < 25 ? 6 : 9} fill={isSelected || isHovered ? 'hsl(var(--foreground))' : 'hsl(var(--muted-foreground))'}
                     fontFamily="'JetBrains Mono', monospace" fontWeight={isSelected ? 700 : 500}
-                    style={{ transition: 'fill 0.2s ease', pointerEvents: 'none' }}>
-                    {country.code}
-                  </text>
+                    style={{ transition: 'fill 0.2s ease', pointerEvents: 'none' }}>{country.code}</text>
                 </g>
               )}
 
-              {/* Player indicator */}
               {isPlayer && (
                 <>
                   <circle cx={pos.x + pos.w - 4} cy={pos.y + 4} r={3.5} fill="hsl(var(--primary))" opacity={0.9} />
                   <circle cx={pos.x + pos.w - 4} cy={pos.y + 4} r={1.5} fill="hsl(var(--primary-foreground))" />
                 </>
               )}
-              {isAtWar && (
-                <circle cx={pos.x + 4} cy={pos.y + 4} r={3} fill="hsl(var(--danger))" className="animate-pulse-glow" />
-              )}
+              {isAtWar && <circle cx={pos.x + 4} cy={pos.y + 4} r={3} fill="hsl(var(--danger))" className="animate-pulse-glow" />}
+            </g>
+          );
+        })}
+
+        {/* Army markers */}
+        {showProvinces && armyPositions.map(({ army, x, y }) => {
+          const totalUnits = army.units.reduce((s, u) => s + u.count, 0);
+          const isPlayer = army.countryId === state.playerCountryId;
+          const countryColor = state.countries[army.countryId]?.color ?? '#888';
+          return (
+            <g key={army.id}>
+              <circle cx={x} cy={y - 3} r={3} fill={isPlayer ? 'hsl(var(--primary))' : countryColor} opacity={0.9} stroke="hsl(var(--foreground))" strokeWidth={0.3} />
+              <text x={x} y={y - 3} textAnchor="middle" dominantBaseline="middle" fontSize={3} fill="hsl(var(--foreground))"
+                fontFamily="'JetBrains Mono', monospace" fontWeight={700} style={{ pointerEvents: 'none' }}>
+                {totalUnits > 99 ? '99+' : totalUnits}
+              </text>
             </g>
           );
         })}
       </svg>
 
-      {/* Province tooltip */}
+      {/* Tooltips */}
       {hoveredProvData && !isPanning && (
         <div className="map-tooltip absolute z-20 animate-fade-up"
-          style={{
-            left: `${mousePos.x - (containerRef.current?.getBoundingClientRect().left ?? 0) + 16}px`,
-            top: `${mousePos.y - (containerRef.current?.getBoundingClientRect().top ?? 0) - 10}px`,
-          }}>
+          style={{ left: `${mousePos.x - (containerRef.current?.getBoundingClientRect().left ?? 0) + 16}px`, top: `${mousePos.y - (containerRef.current?.getBoundingClientRect().top ?? 0) - 10}px` }}>
           <div className="flex items-center gap-2 mb-1.5">
             <div className="w-2 h-2 rounded-sm bg-primary" />
             <span className="font-semibold text-foreground text-xs">{hoveredProvData.name}</span>
           </div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[10px] font-mono">
-            <span className="text-muted-foreground">Pop</span>
-            <span className="text-foreground text-right">{(hoveredProvData.population / 1e6).toFixed(1)}M</span>
-            <span className="text-muted-foreground">GDP</span>
-            <span className="text-foreground text-right">${(hoveredProvData.gdpContribution / 1e3).toFixed(0)}B</span>
-            <span className="text-muted-foreground">Dev</span>
-            <span className="text-foreground text-right">{hoveredProvData.development}/100</span>
-            <span className="text-muted-foreground">Stability</span>
-            <span className="text-foreground text-right">{hoveredProvData.stability.toFixed(0)}%</span>
+            <span className="text-muted-foreground">Pop</span><span className="text-foreground text-right">{(hoveredProvData.population / 1e6).toFixed(1)}M</span>
+            <span className="text-muted-foreground">Terrain</span><span className="text-foreground text-right capitalize">{hoveredProvData.terrain}</span>
+            <span className="text-muted-foreground">Dev</span><span className="text-foreground text-right">{hoveredProvData.development}/100</span>
+            <span className="text-muted-foreground">Morale</span><span className="text-foreground text-right">{hoveredProvData.morale.toFixed(0)}%</span>
+            <span className="text-muted-foreground">Buildings</span><span className="text-foreground text-right">{hoveredProvData.buildings.length}</span>
           </div>
         </div>
       )}
 
-      {/* Country tooltip (only when not showing province tooltip) */}
       {hoveredData && !hoveredProvData && !isPanning && (
         <div className="map-tooltip absolute z-20 animate-fade-up"
-          style={{
-            left: `${mousePos.x - (containerRef.current?.getBoundingClientRect().left ?? 0) + 16}px`,
-            top: `${mousePos.y - (containerRef.current?.getBoundingClientRect().top ?? 0) - 10}px`,
-          }}>
+          style={{ left: `${mousePos.x - (containerRef.current?.getBoundingClientRect().left ?? 0) + 16}px`, top: `${mousePos.y - (containerRef.current?.getBoundingClientRect().top ?? 0) - 10}px` }}>
           <div className="flex items-center gap-2 mb-1.5">
             <div className="w-2 h-2 rounded-sm" style={{ backgroundColor: hoveredData.color }} />
             <span className="font-semibold text-foreground">{hoveredData.name}</span>
           </div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[10px] font-mono">
-            <span className="text-muted-foreground">Pop</span>
-            <span className="text-foreground text-right">{(hoveredData.population / 1e6).toFixed(1)}M</span>
-            <span className="text-muted-foreground">GDP</span>
-            <span className="text-foreground text-right">${(hoveredData.economy.gdp / 1e9).toFixed(0)}B</span>
-            <span className="text-muted-foreground">Military</span>
-            <span className="text-foreground text-right">{Object.values(hoveredData.military.units).reduce((s, v) => s + v, 0).toLocaleString()}</span>
-            <span className="text-muted-foreground">Stability</span>
-            <span className="text-foreground text-right">{hoveredData.stability.toFixed(0)}%</span>
+            <span className="text-muted-foreground">Pop</span><span className="text-foreground text-right">{(hoveredData.population / 1e6).toFixed(1)}M</span>
+            <span className="text-muted-foreground">Stability</span><span className="text-foreground text-right">{hoveredData.stability.toFixed(0)}%</span>
+            <span className="text-muted-foreground">Provinces</span><span className="text-foreground text-right">{getProvincesForCountry(state.provinces, hoveredData.id).length}</span>
           </div>
-          {showProvinces && (
-            <div className="mt-1 pt-1 border-t border-border/30 text-[9px] text-muted-foreground">
-              Click provinces to manage
-            </div>
-          )}
+          {showProvinces && <div className="mt-1 pt-1 border-t border-border/30 text-[9px] text-muted-foreground">Click provinces to manage</div>}
         </div>
       )}
 
-      {/* Zoom controls */}
+      {/* Controls */}
       <div className="absolute bottom-3 right-3 z-20 flex flex-col gap-1">
-        <button onClick={() => setZoom(prev => Math.min(4, prev + 0.3))}
-          className="w-8 h-8 rounded-lg bg-card/80 backdrop-blur-sm border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-card transition-all duration-200">
-          <ZoomIn size={14} />
-        </button>
-        <button onClick={() => setZoom(prev => Math.max(0.5, prev - 0.3))}
-          className="w-8 h-8 rounded-lg bg-card/80 backdrop-blur-sm border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-card transition-all duration-200">
-          <ZoomOut size={14} />
-        </button>
-        <button onClick={resetView}
-          className="w-8 h-8 rounded-lg bg-card/80 backdrop-blur-sm border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-card transition-all duration-200">
-          <Maximize2 size={14} />
-        </button>
+        <button onClick={() => setZoom(prev => Math.min(4, prev + 0.3))} className="w-8 h-8 rounded-lg bg-card/80 backdrop-blur-sm border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-card transition-all"><ZoomIn size={14} /></button>
+        <button onClick={() => setZoom(prev => Math.max(0.5, prev - 0.3))} className="w-8 h-8 rounded-lg bg-card/80 backdrop-blur-sm border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-card transition-all"><ZoomOut size={14} /></button>
+        <button onClick={resetView} className="w-8 h-8 rounded-lg bg-card/80 backdrop-blur-sm border border-border flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-card transition-all"><Maximize2 size={14} /></button>
       </div>
 
-      {/* Zoom level & province hint */}
       <div className="absolute bottom-3 left-3 z-20 flex items-center gap-2">
-        <span className="text-[10px] font-mono text-muted-foreground bg-card/60 backdrop-blur-sm px-2 py-1 rounded-md border border-border/50">
-          {(zoom * 100).toFixed(0)}%
-        </span>
-        {!showProvinces && (
-          <span className="text-[9px] text-muted-foreground/60 bg-card/40 backdrop-blur-sm px-2 py-1 rounded-md border border-border/30">
-            Zoom in to see provinces
-          </span>
-        )}
+        <span className="text-[10px] font-mono text-muted-foreground bg-card/60 backdrop-blur-sm px-2 py-1 rounded-md border border-border/50">{(zoom * 100).toFixed(0)}%</span>
+        {!showProvinces && <span className="text-[9px] text-muted-foreground/60 bg-card/40 backdrop-blur-sm px-2 py-1 rounded-md border border-border/30">Zoom in to see provinces</span>}
       </div>
     </div>
   );
