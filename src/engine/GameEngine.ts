@@ -404,12 +404,14 @@ function processResourceIncome(state: GameState): GameState {
       }
     }
 
-    // Army supply cost
+    // Army supply cost (terrain supply efficiency affects upkeep)
     const armies = Object.values(s.armies).filter(a => a.countryId === countryId);
     let supplyCost = 0;
     for (const army of armies) {
+      const prov = s.provinces[army.provinceId];
+      const supplyEff = prov ? (TERRAIN_SUPPLY_EFFICIENCY[prov.terrain] ?? 1) : 1;
       for (const u of army.units) {
-        supplyCost += UNIT_STATS[u.type].supplyUsage * u.count;
+        supplyCost += (UNIT_STATS[u.type].supplyUsage * u.count) / supplyEff;
       }
     }
     income.money -= supplyCost;
