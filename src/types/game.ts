@@ -17,6 +17,23 @@ export interface GameState {
   events: GameEvent[];
   speed: GameSpeed;
   paused: boolean;
+  constructionQueue: ConstructionItem[];
+}
+
+// Construction Queue
+export type ConstructionCategory = 'infrastructure' | 'industry' | 'military' | 'unit';
+
+export interface ConstructionItem {
+  id: string;
+  countryId: CountryId;
+  provinceId?: ProvinceId;
+  category: ConstructionCategory;
+  type: string; // e.g. 'roads', 'civilian', 'infantry'
+  label: string; // display name
+  cost: number;
+  turnsRequired: number;
+  turnsRemaining: number;
+  startedTurn: number;
 }
 
 // Province
