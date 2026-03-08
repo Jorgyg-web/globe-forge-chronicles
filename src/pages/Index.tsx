@@ -9,6 +9,7 @@ import DiplomacyPanel from '@/components/game/DiplomacyPanel';
 import TechnologyPanel from '@/components/game/TechnologyPanel';
 import InfrastructurePanel from '@/components/game/InfrastructurePanel';
 import ProvincePanel from '@/components/game/ProvincePanel';
+import ConstructionPanel from '@/components/game/ConstructionPanel';
 import EventLog from '@/components/game/EventLog';
 import { useMemo } from 'react';
 
@@ -24,6 +25,7 @@ const GameContent = () => {
       case 'diplomacy': return <DiplomacyPanel />;
       case 'technology': return <TechnologyPanel />;
       case 'infrastructure': return <InfrastructurePanel />;
+      case 'construction': return <ConstructionPanel />;
     }
   }, [activePanel]);
 

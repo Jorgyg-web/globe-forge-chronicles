@@ -1,5 +1,5 @@
 import { useGame, PanelType } from '@/context/GameContext';
-import { BarChart3, Sword, Globe, FlaskConical, Building2, LayoutDashboard, MapPin } from 'lucide-react';
+import { BarChart3, Sword, Globe, FlaskConical, Building2, LayoutDashboard, MapPin, Hammer } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 const panels: { id: PanelType; label: string; icon: React.ReactNode }[] = [
@@ -10,6 +10,7 @@ const panels: { id: PanelType; label: string; icon: React.ReactNode }[] = [
   { id: 'diplomacy', label: 'Diplomacy', icon: <Globe size={16} /> },
   { id: 'technology', label: 'Research', icon: <FlaskConical size={16} /> },
   { id: 'infrastructure', label: 'Infra', icon: <Building2 size={16} /> },
+  { id: 'construction', label: 'Construction', icon: <Hammer size={16} /> },
 ];
 
 const SideNav = () => {

@@ -15,7 +15,7 @@ interface GameContextType {
   setActivePanel: (panel: PanelType) => void;
 }
 
-export type PanelType = 'overview' | 'economy' | 'military' | 'diplomacy' | 'technology' | 'infrastructure' | 'province';
+export type PanelType = 'overview' | 'economy' | 'military' | 'diplomacy' | 'technology' | 'infrastructure' | 'province' | 'construction';
 
 const GameContext = createContext<GameContextType | null>(null);
 
