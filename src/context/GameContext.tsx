@@ -15,22 +15,18 @@ interface GameContextType {
   setActivePanel: (panel: PanelType) => void;
 }
 
-export type PanelType = 'overview' | 'economy' | 'military' | 'diplomacy' | 'technology' | 'infrastructure' | 'province' | 'construction';
+export type PanelType = 'overview' | 'economy' | 'military' | 'diplomacy' | 'technology' | 'province' | 'construction' | 'production';
 
 const GameContext = createContext<GameContextType | null>(null);
 
 function createInitialState(): GameState {
   const countries = initializeDiplomacy(INITIAL_COUNTRIES);
   const countryMap: Record<CountryId, typeof countries[0]> = {};
-  countries.forEach(c => {
-    countryMap[c.id] = c;
-  });
+  countries.forEach(c => { countryMap[c.id] = c; });
   countryMap['usa'] = { ...countryMap['usa'], isPlayerControlled: true };
 
   const provinceMap: Record<ProvinceId, typeof INITIAL_PROVINCES[0]> = {};
-  INITIAL_PROVINCES.forEach(p => {
-    provinceMap[p.id] = p;
-  });
+  INITIAL_PROVINCES.forEach(p => { provinceMap[p.id] = p; });
 
   return {
     turn: 0,
@@ -38,6 +34,7 @@ function createInitialState(): GameState {
     month: 1,
     countries: countryMap,
     provinces: provinceMap,
+    armies: {},
     wars: [],
     alliances: [],
     tradeAgreements: [],
@@ -46,6 +43,7 @@ function createInitialState(): GameState {
     speed: 'normal',
     paused: true,
     constructionQueue: [],
+    productionQueue: [],
   };
 }
 
@@ -68,14 +66,10 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         dispatch({ type: 'NEXT_TURN' });
       }, speedMs);
     }
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [state.paused, speedMs]);
 
-  const wrappedDispatch = useCallback((action: GameAction) => {
-    dispatch(action);
-  }, []);
+  const wrappedDispatch = useCallback((action: GameAction) => { dispatch(action); }, []);
 
   return (
     <GameContext.Provider value={{
