@@ -202,8 +202,8 @@ export async function generateWorld(): Promise<WorldData> {
       stability: 40 + Math.floor(Math.random() * 40),
       corruption: 5 + Math.floor(Math.random() * 30),
       resourceProduction: {
-        food: terrain === 'plains' ? 30 : terrain === 'forest' ? 15 : 5,
-        oil: terrain === 'desert' ? 20 : Math.random() > 0.7 ? 10 : 0,
+        food: terrain === 'plains' ? 30 : terrain === 'forest' ? 15 : terrain === 'jungle' ? 20 : 5,
+        oil: terrain === 'desert' ? 20 : terrain === 'jungle' ? 5 : Math.random() > 0.7 ? 10 : 0,
         metal: terrain === 'mountain' ? 25 : Math.random() > 0.6 ? 10 : 0,
         electronics: dev > 60 ? 15 : 0,
         money: Math.floor(popEst / 100000) + dev * 2,
