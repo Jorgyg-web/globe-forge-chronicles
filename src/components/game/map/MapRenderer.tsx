@@ -1,5 +1,5 @@
 import React from 'react';
-import { CONTINENT_PATHS } from './mapConstants';
+import BaseMapLayer from './BaseMapLayer';
 import ProvinceLayer from './ProvinceLayer';
 import ArmyLayer from './ArmyLayer';
 
