@@ -32,7 +32,7 @@ function createEmptyState(): GameState {
   };
 }
 
-function initializeDiplomacy(countries: Record<CountryId, typeof import('@/types/game').Country>): typeof countries {
+function initializeDiplomacy(countries: Record<CountryId, import('@/types/game').Country>): typeof countries {
   const ids = Object.keys(countries);
   const updated = { ...countries };
   for (const id of ids) {
