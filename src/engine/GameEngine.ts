@@ -202,6 +202,48 @@ export function processAction(state: GameState, action: GameAction): GameState {
         government: { ...c.government, corruption: Math.max(0, Math.min(100, action.level)) },
       }));
 
+    case 'UPGRADE_PROVINCE_INFRA': {
+      const prov = state.provinces[action.provinceId];
+      if (!prov) return state;
+      const current = prov.infrastructure[action.infra];
+      if (current >= 10) return state;
+      return updateProvince(state, action.provinceId, p => ({
+        ...p,
+        infrastructure: { ...p.infrastructure, [action.infra]: current + 1 },
+        development: Math.min(100, p.development + 1),
+      }));
+    }
+
+    case 'UPGRADE_PROVINCE_INDUSTRY': {
+      const prov = state.provinces[action.provinceId];
+      if (!prov) return state;
+      const current = prov.industry[action.industry];
+      if (current >= 10) return state;
+      return updateProvince(state, action.provinceId, p => ({
+        ...p,
+        industry: { ...p.industry, [action.industry]: current + 1 },
+        development: Math.min(100, p.development + 1),
+      }));
+    }
+
+    case 'BUILD_PROVINCE_BASE': {
+      const prov = state.provinces[action.provinceId];
+      if (!prov) return state;
+      return updateProvince(state, action.provinceId, p => ({
+        ...p,
+        military: { ...p.military, bases: p.military.bases + 1 },
+      }));
+    }
+
+    case 'GARRISON_PROVINCE': {
+      const prov = state.provinces[action.provinceId];
+      if (!prov) return state;
+      return updateProvince(state, action.provinceId, p => ({
+        ...p,
+        military: { ...p.military, garrison: p.military.garrison + action.troops },
+      }));
+    }
+
     case 'NEXT_TURN':
       return processTurn(state);
 
@@ -214,6 +256,16 @@ export function processAction(state: GameState, action: GameAction): GameState {
     default:
       return state;
   }
+}
+
+function updateProvince(state: GameState, id: ProvinceId, updater: (p: Province) => Province): GameState {
+  return {
+    ...state,
+    provinces: {
+      ...state.provinces,
+      [id]: updater(state.provinces[id]),
+    },
+  };
 }
 
 function updateCountry(state: GameState, id: CountryId, updater: (c: Country) => Country): GameState {
