@@ -223,7 +223,7 @@ const PROVINCE_DEFS: ProvinceDef[] = [
 
   // ─── Saudi Arabia ───
   { id: 'sau_c', countryId: 'sau', name: 'Central (Riyadh)', pop: 10_000_000, terrain: 'desert', isCoastal: false, dev: 70,
-    resources: { oil: 30, money: 250 }, buildings: { barracks: 1 },
+    resources: { oil: 30, money: 250 }, buildings: { militaryBase: 1 },
     adjacent: ['sau_e', 'sau_w', 'sau_s'] },
   { id: 'sau_e', countryId: 'sau', name: 'Eastern Province', pop: 5_000_000, terrain: 'desert', isCoastal: true, dev: 75,
     resources: { oil: 100, money: 400 }, buildings: { navalBase: 1 },
