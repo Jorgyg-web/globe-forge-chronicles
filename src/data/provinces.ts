@@ -63,7 +63,7 @@ const PROVINCE_DEFS: ProvinceDef[] = [
     resources: { food: 80, metal: 30, money: 350 },
     adjacent: ['usa_ne', 'usa_se', 'usa_sw', 'usa_w'] },
   { id: 'usa_sw', countryId: 'usa', name: 'Southwest', pop: 42_000_000, terrain: 'desert', isCoastal: false, dev: 72,
-    resources: { oil: 50, metal: 40, electronics: 15, money: 250 }, buildings: { tankFactory: 1 },
+    resources: { oil: 50, metal: 40, electronics: 15, money: 250 }, buildings: { militaryBase: 1 },
     adjacent: ['usa_se', 'usa_mw', 'usa_w', 'mex_n'] },
   { id: 'usa_w', countryId: 'usa', name: 'West Coast', pop: 53_000_000, terrain: 'coastal', isCoastal: true, dev: 90,
     resources: { food: 20, electronics: 60, money: 600 }, buildings: { aircraftFactory: 2, navalBase: 1 },
