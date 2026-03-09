@@ -80,7 +80,7 @@ const PROVINCE_DEFS: ProvinceDef[] = [
     resources: { food: 50, electronics: 30, money: 400 }, buildings: { navalBase: 1 },
     adjacent: ['chn_e', 'chn_c'] },
   { id: 'chn_n', countryId: 'chn', name: 'North China', pop: 300_000_000, terrain: 'plains', isCoastal: true, dev: 70,
-    resources: { food: 40, oil: 25, metal: 50, money: 350 }, buildings: { barracks: 2 },
+    resources: { food: 40, oil: 25, metal: 50, money: 350 }, buildings: { militaryBase: 2 },
     adjacent: ['chn_e', 'chn_w', 'chn_c', 'rus_fe'] },
   { id: 'chn_w', countryId: 'chn', name: 'West China', pop: 200_000_000, terrain: 'mountain', isCoastal: false, dev: 45,
     resources: { metal: 60, oil: 15, money: 150 },
