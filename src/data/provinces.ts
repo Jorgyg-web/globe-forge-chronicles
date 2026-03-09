@@ -12,8 +12,8 @@ interface ProvinceDef {
 function makeProvince(d: ProvinceDef): Province {
   const buildings: Building[] = [];
   if (d.dev >= 30) buildings.push({ type: 'infrastructure', level: Math.min(5, Math.floor(d.dev / 20)) });
-  if (d.dev >= 40) buildings.push({ type: 'industry', level: Math.min(5, Math.floor(d.dev / 25)) });
-  if (d.dev >= 50) buildings.push({ type: 'barracks', level: Math.min(3, Math.floor(d.dev / 35)) });
+  if (d.dev >= 40) buildings.push({ type: 'industrialComplex', level: Math.min(5, Math.floor(d.dev / 25)) });
+  if (d.dev >= 50) buildings.push({ type: 'militaryBase', level: Math.min(3, Math.floor(d.dev / 35)) });
   if (d.dev >= 60) buildings.push({ type: 'resourceExtractor', level: Math.min(3, Math.floor(d.dev / 30)) });
 
   if (d.buildings) {
