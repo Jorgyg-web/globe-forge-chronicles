@@ -54,7 +54,7 @@ function makeProvince(d: ProvinceDef): Province {
 const PROVINCE_DEFS: ProvinceDef[] = [
   // ─── USA ───
   { id: 'usa_ne', countryId: 'usa', name: 'Northeast', pop: 56_000_000, terrain: 'urban', isCoastal: true, dev: 85,
-    resources: { food: 10, metal: 20, electronics: 40, money: 500 }, buildings: { tankFactory: 2, aircraftFactory: 1 },
+    resources: { food: 10, metal: 20, electronics: 40, money: 500 }, buildings: { militaryBase: 2, airbase: 1 },
     adjacent: ['usa_se', 'usa_mw'] },
   { id: 'usa_se', countryId: 'usa', name: 'Southeast', pop: 85_000_000, terrain: 'plains', isCoastal: true, dev: 70,
     resources: { food: 60, oil: 10, metal: 15, money: 300 }, buildings: { barracks: 2 },
