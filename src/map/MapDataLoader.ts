@@ -23,11 +23,11 @@ import {
   CountryGeoProperties,
 } from './geoTypes';
 import {
-  polygonToSvgPath,
-  multiPolygonToSvgPath,
+  normalizedGeometryToSvgPath,
   ProjectionConfig,
   getDefaultProjectionConfig,
 } from './projection';
+import { normalizeGeometry } from './geometryValidator';
 import { computeCentroid, computeBounds, updateProvinceGeometry, invalidateCentroidCache } from '@/data/provinceGeometry';
 import { Province } from '@/types/game';
 
@@ -136,14 +136,9 @@ export class MapDataLoader {
    * Convert a GeoJSON feature to SVG path string.
    */
   private featureToSvgPath(feature: GeoJSONFeature): string {
-    const { geometry } = feature;
-    if (geometry.type === 'Polygon') {
-      return polygonToSvgPath(geometry.coordinates, this.projectionConfig);
-    }
-    if (geometry.type === 'MultiPolygon') {
-      return multiPolygonToSvgPath(geometry.coordinates, this.projectionConfig);
-    }
-    return '';
+    const normalized = normalizeGeometry(feature.geometry);
+    if (!normalized) return '';
+    return normalizedGeometryToSvgPath(normalized, this.projectionConfig);
   }
 
   /**
@@ -159,6 +154,12 @@ export class MapDataLoader {
     const svgPath = this.featureToSvgPath(feature);
     if (!svgPath) {
       console.warn(`[MapDataLoader] Could not convert geometry for province ${props.provinceId}`);
+      return null;
+    }
+
+    const normalized = normalizeGeometry(feature.geometry);
+    if (!normalized) {
+      console.warn(`[MapDataLoader] Invalid geometry for province ${props.provinceId}`);
       return null;
     }
 

@@ -32,42 +32,9 @@ interface VisibleProvinceFragment {
   height: number;
 }
 
-interface CountryLabelCandidate {
-  id: string;
-  text: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  fontSize: number;
-  priority: number;
-}
-
-function labelsOverlap(a: CountryLabelCandidate, b: CountryLabelCandidate, padding = 4): boolean {
-  return !(
-    a.x + a.width + padding < b.x ||
-    b.x + b.width + padding < a.x ||
-    a.y + a.height + padding < b.y ||
-    b.y + b.height + padding < a.y
-  );
-}
-
-function filterOverlappingLabels(labels: CountryLabelCandidate[]): CountryLabelCandidate[] {
-  const kept: CountryLabelCandidate[] = [];
-  const sorted = [...labels].sort((a, b) => b.priority - a.priority);
-
-  for (const label of sorted) {
-    if (!kept.some(existing => labelsOverlap(label, existing))) {
-      kept.push(label);
-    }
-  }
-
-  return kept;
-}
-
 const CountryLayer: React.FC = () => {
   const { state, selectedCountryId } = useGame();
-  const { viewport, zoom, showDetails, showProvinces } = useMapContext();
+  const { viewport, showProvinces } = useMapContext();
 
   const countries = useMemo<CachedCountryShape[]>(() => {
     const worldData = getCachedWorldData();
@@ -159,33 +126,6 @@ const CountryLayer: React.FC = () => {
     });
   }, [showProvinces, visibleCountries, visibleProvinceFragments]);
 
-  const visibleLabels = useMemo(() => {
-    if (showDetails) return [];
-
-    const candidates = countryRenderShapes
-      .filter(country => country.width > 10 && country.height > 8)
-      .map(country => {
-        const owner = state.countries[country.id];
-        const text = owner?.code?.toUpperCase() ?? country.id.toUpperCase();
-        const fontSize = showProvinces ? Math.max(3, Math.min(5.5, country.width / 8)) : Math.max(4, Math.min(8, 10 / zoom));
-        const width = text.length * fontSize * 0.58;
-        const height = fontSize * 1.3;
-
-        return {
-          id: country.id,
-          text,
-          x: country.cx - width / 2,
-          y: country.cy - height / 2,
-          width,
-          height,
-          fontSize,
-          priority: country.width * country.height + (selectedCountryId === country.id ? 10_000 : 0),
-        };
-      });
-
-    return filterOverlappingLabels(candidates);
-  }, [countryRenderShapes, state.countries, selectedCountryId, showDetails, showProvinces, zoom]);
-
   return (
     <g>
       {countryRenderShapes.map(country => {
@@ -197,6 +137,7 @@ const CountryLayer: React.FC = () => {
             key={country.id}
             d={country.path}
             fill={showProvinces ? 'none' : owner?.color ?? 'hsl(var(--map-land))'}
+            fillRule="evenodd"
             opacity={showProvinces ? 1 : isSelected ? 0.38 : 0.26}
             stroke={isSelected ? 'hsl(var(--primary))' : 'hsl(var(--map-border))'}
             strokeWidth={showProvinces ? (isSelected ? 1.2 : 0.8) : isSelected ? 1.4 : 0.6}
@@ -205,41 +146,6 @@ const CountryLayer: React.FC = () => {
           />
         );
       })}
-
-      {visibleLabels.map(label => (
-        <g key={`country_label_${label.id}`} style={{ pointerEvents: 'none' }}>
-          <text
-            x={label.x + label.width / 2}
-            y={label.y + label.height / 2}
-            textAnchor="middle"
-            dominantBaseline="middle"
-            fontSize={label.fontSize}
-            fill="hsl(var(--background))"
-            fontFamily="'JetBrains Mono', monospace"
-            fontWeight={700}
-            stroke="hsl(var(--background))"
-            strokeWidth={1.8}
-            opacity={0.8}
-            letterSpacing={0.8}
-          >
-            {label.text}
-          </text>
-          <text
-            x={label.x + label.width / 2}
-            y={label.y + label.height / 2}
-            textAnchor="middle"
-            dominantBaseline="middle"
-            fontSize={label.fontSize}
-            fill="hsl(var(--foreground))"
-            fontFamily="'JetBrains Mono', monospace"
-            fontWeight={700}
-            opacity={showProvinces ? 0.7 : 0.88}
-            letterSpacing={0.8}
-          >
-            {label.text}
-          </text>
-        </g>
-      ))}
     </g>
   );
 };

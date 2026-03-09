@@ -40,7 +40,8 @@
  */
 
 export { MapDataLoader, applyGeometriesToProvinces, getMapDataLoader } from './MapDataLoader';
-export { projectPoint, ringToSvgPath, polygonToSvgPath, multiPolygonToSvgPath, getDefaultProjectionConfig } from './projection';
+export { normalizeGeometry, geometryCentroid, signedRingArea } from './geometryValidator';
+export { projectPoint, ringToSvgPath, polygonToSvgPath, multiPolygonToSvgPath, normalizedGeometryToSvgPath, normalizedPolygonToSvgPath, getDefaultProjectionConfig } from './projection';
 export type { ProjectionConfig } from './projection';
 export type {
   GeoJSONFeatureCollection,

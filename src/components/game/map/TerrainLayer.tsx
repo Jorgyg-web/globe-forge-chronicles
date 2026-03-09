@@ -18,6 +18,7 @@ const TerrainLayer: React.FC = () => {
       <path
         d={combinedPath}
         fill="hsl(var(--map-land))"
+        fillRule="evenodd"
         stroke="hsl(var(--map-border))"
         strokeWidth={showProvinces ? 0.2 : 0.35}
         opacity={showProvinces ? 0.12 : 0.2}

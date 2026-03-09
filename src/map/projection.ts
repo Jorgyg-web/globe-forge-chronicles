@@ -8,6 +8,8 @@
  * comfortably within the SVG canvas.
  */
 
+import { GeoRing, NormalizedGeometry, NormalizedPolygon } from './geometryValidator';
+
 export interface ProjectionConfig {
   viewWidth: number;
   viewHeight: number;
@@ -64,14 +66,14 @@ export function projectPoint(
   // Invert Y because SVG Y grows downward
   const y = paddingY + (1 - (mercY - minMercY) / (maxMercY - minMercY)) * drawH;
 
-  return { x: Math.round(x * 100) / 100, y: Math.round(y * 100) / 100 };
+  return { x, y };
 }
 
 /**
  * Convert a ring of [lng, lat] coordinates into an SVG path `d` string.
  */
 export function ringToSvgPath(
-  ring: number[][],
+  ring: GeoRing,
   config: ProjectionConfig = DEFAULT_CONFIG
 ): string {
   if (ring.length === 0) return '';
@@ -86,16 +88,35 @@ export function ringToSvgPath(
   return parts.join(' ');
 }
 
+export function normalizedPolygonToSvgPath(
+  polygon: NormalizedPolygon,
+  config: ProjectionConfig = DEFAULT_CONFIG,
+): string {
+  const outer = ringToSvgPath(polygon.outer, config);
+  const holes = polygon.holes.map(ring => ringToSvgPath(ring, config)).filter(Boolean);
+  return [outer, ...holes].filter(Boolean).join(' ');
+}
+
+export function normalizedGeometryToSvgPath(
+  geometry: NormalizedGeometry,
+  config: ProjectionConfig = DEFAULT_CONFIG,
+): string {
+  return geometry.polygons
+    .map(polygon => normalizedPolygonToSvgPath(polygon, config))
+    .filter(Boolean)
+    .join(' ');
+}
+
 /**
  * Convert a GeoJSON Polygon (array of rings) into SVG path(s).
- * Only uses the outer ring (index 0). Inner rings (holes) are ignored for simplicity.
+ * Uses all rings so holes remain stable.
  */
 export function polygonToSvgPath(
   coordinates: number[][][],
   config: ProjectionConfig = DEFAULT_CONFIG
 ): string {
-  if (coordinates.length === 0 || coordinates[0].length === 0) return '';
-  return ringToSvgPath(coordinates[0], config);
+  if (coordinates.length === 0) return '';
+  return coordinates.map(ring => ringToSvgPath(ring, config)).filter(Boolean).join(' ');
 }
 
 /**

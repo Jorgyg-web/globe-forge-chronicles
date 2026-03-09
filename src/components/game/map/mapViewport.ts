@@ -125,8 +125,8 @@ export function screenToWorld(
 ): ScreenPoint {
   const { scale, offsetX, offsetY } = getBaseMapTransform(size);
   return {
-    x: (point.x - offsetX - pan.x) / (scale * zoom),
-    y: (point.y - offsetY - pan.y) / (scale * zoom),
+    x: ((point.x - pan.x) / zoom - offsetX) / scale,
+    y: ((point.y - pan.y) / zoom - offsetY) / scale,
   };
 }
 
@@ -138,7 +138,7 @@ export function worldToScreen(
 ): ScreenPoint {
   const { scale, offsetX, offsetY } = getBaseMapTransform(size);
   return {
-    x: offsetX + pan.x + point.x * scale * zoom,
-    y: offsetY + pan.y + point.y * scale * zoom,
+    x: pan.x + (offsetX + point.x * scale) * zoom,
+    y: pan.y + (offsetY + point.y * scale) * zoom,
   };
 }

@@ -17,8 +17,8 @@ const ProvincePath: React.FC<ProvincePathProps> = React.memo(({ geometry, terrai
   const terrainColor = TERRAIN_COLORS[terrain];
   return (
     <>
-      <path d={geometry} fill={terrainColor} opacity={0.5} stroke={showBorder ? 'hsl(var(--map-border))' : 'none'} strokeWidth={0.3} />
-      <path d={geometry} fill={ownerColor} opacity={isConquered ? 0.15 : 0.2} style={{ pointerEvents: 'none' }} />
+      <path d={geometry} fill={terrainColor} fillRule="evenodd" opacity={0.5} stroke={showBorder ? 'hsl(var(--map-border))' : 'none'} strokeWidth={0.3} vectorEffect="non-scaling-stroke" />
+      <path d={geometry} fill={ownerColor} fillRule="evenodd" opacity={isConquered ? 0.15 : 0.2} style={{ pointerEvents: 'none' }} />
     </>
   );
 });
@@ -100,10 +100,12 @@ export const CountryBordersLayer: React.FC<CountryBordersLayerProps> = React.mem
           key={`country_border_${countryId}`}
           d={combinedPath}
           fill="none"
+          fillRule="evenodd"
           stroke="hsl(var(--foreground))"
           strokeWidth={1.2}
           opacity={0.4}
           strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
         />
       );
     });

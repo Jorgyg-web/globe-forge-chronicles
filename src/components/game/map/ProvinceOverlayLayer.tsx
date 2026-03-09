@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { CachedProvinceData } from './ProvincePathCache';
 
 interface ProvinceOverlayLayerProps {
@@ -10,87 +10,12 @@ interface ProvinceOverlayLayerProps {
   troopCounts: Record<string, number>;
 }
 
-// Zoom thresholds - adjusted for better readability
 const ZOOM_PROVINCE_BORDERS = 1.8
-const ZOOM_MAJOR_LABELS = 2.4
-const ZOOM_ALL_LABELS = 3
 const ZOOM_DETAILS = 3          // close: show stats, morale bars, building counts
-
-interface LabelBounds {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-// Check if two label bounds overlap
-function labelsOverlap(a: LabelBounds, b: LabelBounds, padding: number = 2): boolean {
-  return !(a.x + a.width + padding < b.x ||
-           b.x + b.width + padding < a.x ||
-           a.y + a.height + padding < b.y ||
-           b.y + b.height + padding < a.y);
-}
-
-// Filter labels to remove overlapping ones (keep larger/more important ones)
-function filterOverlappingLabels<T extends { x: number; y: number; width: number; height: number; priority: number }>(
-  labels: T[]
-): T[] {
-  // Sort by priority (higher = more important, should be kept)
-  const sorted = [...labels].sort((a, b) => b.priority - a.priority);
-  const kept: T[] = [];
-  
-  for (const label of sorted) {
-    const overlaps = kept.some(existing => labelsOverlap(label, existing));
-    if (!overlaps) {
-      kept.push(label);
-    }
-  }
-  
-  return kept;
-}
 
 export const ProvinceOverlayLayer: React.FC<ProvinceOverlayLayerProps> = React.memo(({
   provinces, selectedProvinceId, selectedCountryId, moveTargets, zoom, troopCounts,
 }) => {
-  // Filter province labels to avoid overlaps
-  const visibleProvinceLabels = useMemo(() => {
-    const showMajorLabels = zoom >= ZOOM_MAJOR_LABELS && zoom < ZOOM_ALL_LABELS;
-    const showAllLabels = zoom >= ZOOM_ALL_LABELS;
-    
-    if (!showMajorLabels && !showAllLabels) return [];
-    
-    // Calculate which provinces should show labels based on zoom
-    const candidates = provinces
-      .filter(p => {
-        if (showAllLabels) {
-          return p.boundsW > 5 && p.boundsH > 3;
-        }
-        // Major labels only - larger provinces
-        return p.boundsW > 15 && p.boundsH > 10;
-      })
-      .map(p => {
-        const fontSize = showAllLabels 
-          ? Math.min(3.5, Math.max(2, p.boundsW / 6))
-          : Math.min(4, Math.max(2.5, p.boundsW / 5));
-        const textWidth = p.name.length * fontSize * 0.5;
-        const textHeight = fontSize * 1.2;
-        const area = p.boundsW * p.boundsH;
-        
-        return {
-          ...p,
-          x: p.centroidX - textWidth / 2,
-          y: p.centroidY - textHeight / 2,
-          width: textWidth,
-          height: textHeight,
-          fontSize,
-          // Priority: selected > larger area
-          priority: p.id === selectedProvinceId ? 10000 : area,
-        };
-      });
-    
-    return filterOverlappingLabels(candidates);
-  }, [provinces, zoom, selectedProvinceId]);
-
   const showProvinceBorders = zoom >= ZOOM_PROVINCE_BORDERS;
   const showDetails = zoom >= ZOOM_DETAILS;
 
@@ -117,30 +42,6 @@ export const ProvinceOverlayLayer: React.FC<ProvinceOverlayLayerProps> = React.m
         if (!p) return null;
         return <path d={p.geometry} fill="hsl(var(--primary))" opacity={0.5} stroke="hsl(var(--primary))" strokeWidth={1.5} />;
       })()}
-
-      {/* === ZOOM LEVEL: Province labels (filtered for overlaps) === */}
-      {visibleProvinceLabels.map(p => (
-        <g key={`lbl_${p.id}`}>
-          {/* Text shadow */}
-          <text x={p.centroidX} y={p.centroidY + (showDetails ? -2 : 0)}
-            textAnchor="middle" dominantBaseline="middle"
-            fontSize={p.fontSize} fill="hsl(var(--background))"
-            fontFamily="'JetBrains Mono', monospace"
-            fontWeight={p.id === selectedProvinceId ? 700 : 500}
-            stroke="hsl(var(--background))" strokeWidth={1.5}
-            opacity={0.7}>
-            {p.name.length > 12 ? p.name.slice(0, 11) + '…' : p.name}
-          </text>
-          <text x={p.centroidX} y={p.centroidY + (showDetails ? -2 : 0)}
-            textAnchor="middle" dominantBaseline="middle"
-            fontSize={p.fontSize} fill="hsl(var(--foreground))"
-            fontFamily="'JetBrains Mono', monospace"
-            fontWeight={p.id === selectedProvinceId ? 700 : 500}
-            opacity={p.id === selectedProvinceId ? 1 : 0.8}>
-            {p.name.length > 12 ? p.name.slice(0, 11) + '…' : p.name}
-          </text>
-        </g>
-      ))}
 
       {/* === ZOOM LEVEL: Detail indicators (close zoom) === */}
       {showDetails && provinces.filter(p => p.boundsW > 10 && p.boundsH > 8).map(p => {

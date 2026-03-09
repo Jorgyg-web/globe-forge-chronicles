@@ -8,7 +8,8 @@
 
 import { Country, Province, Building, TerrainType, Resources, TERRAIN_RESOURCES } from '@/types/game';
 import { randomFromKey, randomIntFromKey } from '@/lib/deterministicRandom';
-import { projectPoint, getDefaultProjectionConfig } from './projection';
+import { geometryCentroid, normalizeGeometry } from './geometryValidator';
+import { getDefaultProjectionConfig, normalizedGeometryToSvgPath } from './projection';
 import { updateProvinceGeometry, invalidateCentroidCache } from '@/data/provinceGeometry';
 
 // ─── Country overrides (preserve gameplay stats for key countries) ─────
@@ -83,45 +84,17 @@ function inferGovernment(name: string): Country['government']['type'] {
   return 'democracy';
 }
 
-// ─── Extract all outer rings from a GeoJSON geometry ─────
-function extractOuterRings(geometry: any): number[][][] {
-  if (!geometry) return [];
-  if (geometry.type === 'Polygon') {
-    return [geometry.coordinates[0]]; // outer ring only
-  }
-  if (geometry.type === 'MultiPolygon') {
-    return geometry.coordinates.map((poly: number[][][]) => poly[0]);
-  }
-  return [];
-}
-
-function ringToSvgPathProjected(ring: number[][], cfg: ReturnType<typeof getDefaultProjectionConfig>): string {
-  if (ring.length < 3) return '';
-  const parts: string[] = [];
-  for (let i = 0; i < ring.length; i++) {
-    const { x, y } = projectPoint(ring[i][0], ring[i][1], cfg);
-    parts.push(`${i === 0 ? 'M' : 'L'}${x},${y}`);
-  }
-  parts.push('Z');
-  return parts.join(' ');
-}
-
 function geometryToSvgPath(geometry: any, cfg: ReturnType<typeof getDefaultProjectionConfig>): string {
-  const rings = extractOuterRings(geometry);
-  return rings.map(ring => ringToSvgPathProjected(ring, cfg)).filter(p => p).join(' ');
+  const normalized = normalizeGeometry(geometry);
+  if (!normalized) return '';
+  return normalizedGeometryToSvgPath(normalized, cfg);
 }
 
 function getCentroidFromGeometry(geometry: any): { lat: number; lng: number } {
-  const rings = extractOuterRings(geometry);
-  let totalLat = 0, totalLng = 0, count = 0;
-  for (const ring of rings) {
-    for (const pt of ring) {
-      totalLng += pt[0];
-      totalLat += pt[1];
-      count++;
-    }
-  }
-  return count > 0 ? { lat: totalLat / count, lng: totalLng / count } : { lat: 0, lng: 0 };
+  const normalized = normalizeGeometry(geometry);
+  if (!normalized) return { lat: 0, lng: 0 };
+  const centroid = geometryCentroid(normalized);
+  return { lat: centroid.lat, lng: centroid.lng };
 }
 
 function keyedChance(key: string, chance: number): boolean {
