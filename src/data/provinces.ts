@@ -212,7 +212,7 @@ const PROVINCE_DEFS: ProvinceDef[] = [
 
   // ─── Turkey ───
   { id: 'tur_m', countryId: 'tur', name: 'Marmara', pop: 25_000_000, terrain: 'coastal', isCoastal: true, dev: 70,
-    resources: { food: 15, money: 200 }, buildings: { barracks: 1, navalBase: 1 },
+    resources: { food: 15, money: 200 }, buildings: { militaryBase: 1, navalBase: 1 },
     adjacent: ['tur_a'] },
   { id: 'tur_a', countryId: 'tur', name: 'Anatolia', pop: 35_000_000, terrain: 'plains', isCoastal: false, dev: 50,
     resources: { food: 50, metal: 30, money: 120 },
