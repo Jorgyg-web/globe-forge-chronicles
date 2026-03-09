@@ -91,7 +91,7 @@ const PROVINCE_DEFS: ProvinceDef[] = [
 
   // ─── Russia ───
   { id: 'rus_w', countryId: 'rus', name: 'Western Russia', pop: 80_000_000, terrain: 'forest', isCoastal: false, dev: 65,
-    resources: { food: 30, oil: 30, metal: 35, money: 300 }, buildings: { barracks: 2, tankFactory: 1 },
+    resources: { food: 30, oil: 30, metal: 35, money: 300 }, buildings: { militaryBase: 2 },
     adjacent: ['rus_s', 'rus_u', 'pol_n', 'deu_e'] },
   { id: 'rus_s', countryId: 'rus', name: 'Southern Russia', pop: 25_000_000, terrain: 'plains', isCoastal: true, dev: 50,
     resources: { food: 50, oil: 20, money: 150 },
