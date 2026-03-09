@@ -74,7 +74,7 @@ const PROVINCE_DEFS: ProvinceDef[] = [
 
   // ─── China ───
   { id: 'chn_e', countryId: 'chn', name: 'East China', pop: 450_000_000, terrain: 'urban', isCoastal: true, dev: 80,
-    resources: { food: 30, metal: 25, electronics: 50, money: 600 }, buildings: { tankFactory: 2, aircraftFactory: 1 },
+    resources: { food: 30, metal: 25, electronics: 50, money: 600 }, buildings: { militaryBase: 2, airbase: 1 },
     adjacent: ['chn_s', 'chn_n', 'chn_c', 'kor_c'] },
   { id: 'chn_s', countryId: 'chn', name: 'South China', pop: 350_000_000, terrain: 'forest', isCoastal: true, dev: 75,
     resources: { food: 50, electronics: 30, money: 400 }, buildings: { navalBase: 1 },
