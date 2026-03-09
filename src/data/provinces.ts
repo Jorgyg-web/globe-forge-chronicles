@@ -167,7 +167,7 @@ const PROVINCE_DEFS: ProvinceDef[] = [
 
   // ─── India ───
   { id: 'ind_n', countryId: 'ind', name: 'North India', pop: 450_000_000, terrain: 'plains', isCoastal: false, dev: 45,
-    resources: { food: 80, metal: 15, money: 200 }, buildings: { barracks: 2 },
+    resources: { food: 80, metal: 15, money: 200 }, buildings: { militaryBase: 2 },
     adjacent: ['ind_c', 'ind_w', 'ind_e', 'chn_w'] },
   { id: 'ind_s', countryId: 'ind', name: 'South India', pop: 300_000_000, terrain: 'coastal', isCoastal: true, dev: 55,
     resources: { food: 40, electronics: 20, money: 250 },
