@@ -190,7 +190,7 @@ export async function generateWorld(): Promise<WorldData> {
     const dev = 20 + Math.floor(Math.random() * 60);
     const buildings: Building[] = [];
     if (dev >= 30) buildings.push({ type: 'infrastructure', level: Math.min(3, Math.floor(dev / 25)) });
-    if (dev >= 50) buildings.push({ type: 'industry', level: Math.min(3, Math.floor(dev / 30)) });
+    if (dev >= 50) buildings.push({ type: 'industrialComplex', level: Math.min(3, Math.floor(dev / 30)) });
 
     provinces.push({
       id: `${countryId}_main`,
