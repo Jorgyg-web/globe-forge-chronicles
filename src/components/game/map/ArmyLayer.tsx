@@ -33,8 +33,9 @@ function getDominantUnitIcon(army: Army): string {
 const ArmyLayer: React.FC = () => {
   const { state, selectedArmyId, setSelectedArmyId, setActivePanel } = useGame();
   const { zoom } = useMapContext();
-  const showArmies = zoom >= 1.5;
-  const showMovement = zoom >= 1.2;
+  // Show armies at medium-close zoom (2.0+), movement arrows slightly earlier (1.8+)
+  const showArmies = zoom >= 2.0;
+  const showMovement = zoom >= 1.8;
 
   const armyPositions = useMemo(() => {
     const positions: { army: Army; x: number; y: number; targetX?: number; targetY?: number }[] = [];
