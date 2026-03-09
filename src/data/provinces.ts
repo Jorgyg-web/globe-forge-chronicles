@@ -184,7 +184,7 @@ const PROVINCE_DEFS: ProvinceDef[] = [
 
   // ─── Brazil ───
   { id: 'bra_se', countryId: 'bra', name: 'Southeast', pop: 90_000_000, terrain: 'urban', isCoastal: true, dev: 65,
-    resources: { food: 20, metal: 20, money: 300 }, buildings: { barracks: 1 },
+    resources: { food: 20, metal: 20, money: 300 }, buildings: { militaryBase: 1 },
     adjacent: ['bra_ne', 'bra_s', 'bra_cw'] },
   { id: 'bra_ne', countryId: 'bra', name: 'Northeast', pop: 57_000_000, terrain: 'plains', isCoastal: true, dev: 40,
     resources: { food: 40, money: 100 },
