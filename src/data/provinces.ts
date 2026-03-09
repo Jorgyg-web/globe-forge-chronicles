@@ -329,7 +329,7 @@ const PROVINCE_DEFS: ProvinceDef[] = [
 
   // ─── Mexico ───
   { id: 'mex_c', countryId: 'mex', name: 'Central Mexico', pop: 45_000_000, terrain: 'urban', isCoastal: false, dev: 55,
-    resources: { food: 20, money: 200 }, buildings: { barracks: 1 },
+    resources: { food: 20, money: 200 }, buildings: { militaryBase: 1 },
     adjacent: ['mex_n', 'mex_s', 'mex_se'] },
   { id: 'mex_n', countryId: 'mex', name: 'Northern Mexico', pop: 40_000_000, terrain: 'desert', isCoastal: true, dev: 50,
     resources: { oil: 20, metal: 30, money: 150 },
