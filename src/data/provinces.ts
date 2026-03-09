@@ -318,7 +318,7 @@ const PROVINCE_DEFS: ProvinceDef[] = [
 
   // ─── Poland ───
   { id: 'pol_c', countryId: 'pol', name: 'Central Poland', pop: 12_000_000, terrain: 'plains', isCoastal: false, dev: 68,
-    resources: { food: 20, metal: 10, money: 180 }, buildings: { barracks: 1 },
+    resources: { food: 20, metal: 10, money: 180 }, buildings: { militaryBase: 1 },
     adjacent: ['pol_s', 'pol_n', 'deu_e'] },
   { id: 'pol_s', countryId: 'pol', name: 'Southern Poland', pop: 12_000_000, terrain: 'mountain', isCoastal: false, dev: 62,
     resources: { metal: 40, money: 130 },
