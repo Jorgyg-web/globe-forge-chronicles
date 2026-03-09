@@ -8,7 +8,7 @@
  *   const { loadProvinces, loadCountries, isLoading, error } = useMapData();
  *   
  *   useEffect(() => {
- *     loadProvinces('/data/provinces.geojson');
+ *     loadProvinces('/map/provinces.geojson');
  *   }, []);
  */
 

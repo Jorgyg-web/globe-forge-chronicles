@@ -10,7 +10,7 @@ interface ProvinceOverlayLayerProps {
   troopCounts: Record<string, number>;
 }
 
-const ZOOM_PROVINCE_BORDERS = 1.8
+const ZOOM_PROVINCE_BORDERS = 1.5
 const ZOOM_DETAILS = 3          // close: show stats, morale bars, building counts
 
 export const ProvinceOverlayLayer: React.FC<ProvinceOverlayLayerProps> = React.memo(({

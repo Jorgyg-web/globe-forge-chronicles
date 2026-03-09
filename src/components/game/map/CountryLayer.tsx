@@ -4,6 +4,7 @@ import { computeBounds, getProvinceBounds, getProvinceCentroid } from '@/data/pr
 import { getCachedWorldData } from '@/map/worldGenerator';
 import { useMapContext } from './MapContext';
 import { filterVisibleBounds } from './mapViewport';
+import { buildBoundsQuadtree, queryBoundsQuadtree } from './spatialIndex';
 
 interface CachedCountryShape {
   id: string;
@@ -57,9 +58,14 @@ const CountryLayer: React.FC = () => {
     });
   }, []);
 
+  const countrySpatialIndex = useMemo(
+    () => buildBoundsQuadtree(countries),
+    [countries],
+  );
+
   const visibleCountries = useMemo(
-    () => filterVisibleBounds(countries, viewport),
-    [countries, viewport],
+    () => queryBoundsQuadtree(countrySpatialIndex, viewport),
+    [countrySpatialIndex, viewport],
   );
 
   const visibleProvinceFragments = useMemo<VisibleProvinceFragment[]>(() => {

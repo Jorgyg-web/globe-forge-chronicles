@@ -1,10 +1,9 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo } from 'react';
 import { useGame } from '@/context/GameContext';
 
 import { useMapContext } from './MapContext';
 import { getProvinceBounds, getProvinceCentroid } from '@/data/provinceGeometry';
 import { StaticGeometryLayer, CachedProvinceData } from './ProvincePathCache';
-import { ProvinceInteractionLayer } from './ProvinceInteractionLayer';
 import { ProvinceOverlayLayer } from './ProvinceOverlayLayer';
 import { buildBoundsQuadtree, queryBoundsQuadtree } from './spatialIndex';
 
@@ -12,8 +11,8 @@ import { buildBoundsQuadtree, queryBoundsQuadtree } from './spatialIndex';
 const ZOOM_PROVINCE_BORDERS = 1.5;
 
 const ProvinceLayer: React.FC = () => {
-  const { state, selectedCountryId, selectedProvinceId, setSelectedCountryId, setSelectedProvinceId, selectedArmyIds, setActivePanel, dispatch } = useGame();
-  const { zoom, isZooming, moveMode, moveTargets, setHoveredCountry, setHoveredProvince, showProvinces, viewport } = useMapContext();
+  const { state, selectedCountryId, selectedProvinceId } = useGame();
+  const { zoom, isZooming, moveTargets, showProvinces, viewport } = useMapContext();
 
   const showProvinceBorders = zoom >= ZOOM_PROVINCE_BORDERS
 
@@ -69,28 +68,6 @@ const ProvinceLayer: React.FC = () => {
     return counts;
   }, [state.armies]);
 
-  const handleProvinceClick = useCallback((provId: string, countryId: string) => {
-    if (moveMode && selectedArmyIds.length > 0) {
-      for (const armyId of selectedArmyIds) {
-        dispatch({ type: 'MOVE_ARMY', armyId, targetProvinceId: provId });
-      }
-      return;
-    }
-    setSelectedCountryId(countryId);
-    setSelectedProvinceId(provId);
-    setActivePanel('province');
-  }, [moveMode, selectedArmyIds, dispatch, setSelectedCountryId, setSelectedProvinceId, setActivePanel]);
-
-  const handleProvinceEnter = useCallback((provId: string, countryId: string) => {
-    setHoveredProvince(provId);
-    setHoveredCountry(countryId);
-  }, [setHoveredProvince, setHoveredCountry]);
-
-  const handleProvinceLeave = useCallback(() => {
-    setHoveredProvince(null);
-    setHoveredCountry(null);
-  }, [setHoveredProvince, setHoveredCountry]);
-
   // Player/war indicators — only for countries with provinces
   const indicators = useMemo(() => {
     const items: React.ReactNode[] = [];
@@ -124,18 +101,12 @@ const ProvinceLayer: React.FC = () => {
       {/* Layer 1: Static province fills — rarely re-renders */}
       <StaticGeometryLayer provinces={visibleProvinces} showProvinceBorders={showProvinceBorders} />
 
+      {/* Province detection is now pixel-based via ProvinceManager (handled in WorldMap) */}
+
       {/* While zooming with many provinces visible, keep only the cheapest layer alive */}
       {isZooming ? null : (
         <>
-      {/* Layer 2: Invisible interaction hit targets — event delegation */}
-      <ProvinceInteractionLayer
-        provinces={visibleProvinces}
-        onProvinceClick={handleProvinceClick}
-        onProvinceEnter={handleProvinceEnter}
-        onProvinceLeave={handleProvinceLeave}
-      />
-
-      {/* Layer 3: Dynamic overlays (selection, labels, details) */}
+      {/* Layer 2: Dynamic overlays (selection, labels, details) */}
       <ProvinceOverlayLayer
         provinces={visibleProvinces}
         selectedProvinceId={selectedProvinceId}

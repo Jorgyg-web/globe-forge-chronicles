@@ -7,18 +7,22 @@ import LabelLayer from './map/LabelLayer';
 import MapTooltipLayer from './map/MapTooltipLayer';
 import MapControls from './map/MapControls';
 import { screenToWorld } from './map/mapViewport';
+import { getProvinceCentroid } from '@/data/provinceGeometry';
+import { ProvinceManager } from '@/map/ProvinceManager';
 
 const WorldMap = () => {
-  const { state, selectedArmyIds, setSelectedArmyIds, worldLoading } = useGame();
+  const { state, selectedArmyIds, setSelectedArmyIds, worldLoading,
+    selectedCountryId, setSelectedCountryId, selectedProvinceId, setSelectedProvinceId,
+    setActivePanel, dispatch } = useGame();
   const [hoveredCountry, setHoveredCountry] = useState<string | null>(null);
   const [hoveredProvince, setHoveredProvince] = useState<string | null>(null);
   const [camera, setCamera] = useState(DEFAULT_MAP_CAMERA);
   const [isZooming, setIsZooming] = useState(false);
-  const zoomRef = useRef(camera.zoom);
-  const panRef = useRef(camera.pan);
+  const cameraRef = useRef(camera);
   const zoomEndTimeoutRef = useRef<number | null>(null);
   const [isPanning, setIsPanning] = useState(false);
-  const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  // Track the mouse-down position and camera snapshot for anchor-based panning
+  const panAnchorRef = useRef<{ mouseX: number; mouseY: number; cam: typeof camera } | null>(null);
   const [dragStartPos, setDragStartPos] = useState<{ x: number; y: number } | null>(null);
   const [selectionBox, setSelectionBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -41,12 +45,8 @@ const WorldMap = () => {
   const showDetails = camera.zoom > 3;
 
   useEffect(() => {
-    zoomRef.current = camera.zoom;
-  }, [camera.zoom]);
-
-  useEffect(() => {
-    panRef.current = camera.pan;
-  }, [camera.pan]);
+    cameraRef.current = camera;
+  }, [camera]);
 
   useEffect(() => {
     const element = containerRef.current;
@@ -66,7 +66,7 @@ const WorldMap = () => {
     observer.observe(element);
 
     return () => observer.disconnect();
-  }, []);
+  }, [worldLoading]);
 
   const applyZoomAtPoint = useCallback((nextZoom: number, anchor: { x: number; y: number }) => {
     setIsZooming(true);
@@ -89,7 +89,7 @@ const WorldMap = () => {
     if (!rect) return;
 
     const zoomFactor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
-    applyZoomAtPoint(zoomRef.current * zoomFactor, {
+    applyZoomAtPoint(cameraRef.current.zoom * zoomFactor, {
       x: e.clientX - rect.left,
       y: e.clientY - rect.top,
     });
@@ -104,7 +104,7 @@ const WorldMap = () => {
     return () => {
       element.removeEventListener('wheel', handleWheel);
     };
-  }, [handleWheel]);
+  }, [handleWheel, worldLoading]);
 
   useEffect(() => () => {
     if (zoomEndTimeoutRef.current != null) {
@@ -115,17 +115,28 @@ const WorldMap = () => {
   const handleMouseDown = (e: React.MouseEvent) => {
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
-    setDragStartPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+    const localX = e.clientX - rect.left;
+    const localY = e.clientY - rect.top;
+    setDragStartPos({ x: localX, y: localY });
     if (e.button === 0 && !moveMode) {
       setIsPanning(true);
-      setPanStart({ x: e.clientX - camera.pan.x, y: e.clientY - camera.pan.y });
+      // Snapshot mouse position and camera for anchor-based panning
+      panAnchorRef.current = {
+        mouseX: e.clientX,
+        mouseY: e.clientY,
+        cam: { ...cameraRef.current },
+      };
     }
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
     setMousePos({ x: e.clientX, y: e.clientY });
-    if (isPanning) {
-      setCamera(currentCamera => panMapCamera(currentCamera, { x: e.clientX - panStart.x, y: e.clientY - panStart.y }));
+    if (isPanning && panAnchorRef.current) {
+      // Compute screen-pixel delta from the original mouse-down position
+      const dx = e.clientX - panAnchorRef.current.mouseX;
+      const dy = e.clientY - panAnchorRef.current.mouseY;
+      // Apply delta to the snapshot camera (avoids cumulative drift)
+      setCamera(panMapCamera(panAnchorRef.current.cam, { x: dx, y: dy }, containerSize));
     }
     if (dragStartPos && !isPanning) {
       const rect = containerRef.current?.getBoundingClientRect();
@@ -143,21 +154,45 @@ const WorldMap = () => {
         setSelectionBox({ x, y, w, h });
       }
     }
+
+    // Pixel-based province/country hover detection via ProvinceManager
+    if (!isPanning) {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (rect) {
+        const localX = e.clientX - rect.left;
+        const localY = e.clientY - rect.top;
+        const world = screenToWorld({ x: localX, y: localY }, cameraRef.current, containerSize);
+        const provId = ProvinceManager.getInstance().getProvinceAtWorld(world.x, world.y);
+        if (provId !== hoveredProvince) {
+          setHoveredProvince(provId);
+          if (provId) {
+            const prov = state.provinces[provId];
+            setHoveredCountry(prov?.countryId ?? null);
+          } else {
+            setHoveredCountry(null);
+          }
+        }
+      }
+    }
   };
 
-  const handleMouseUp = () => {
+  const handleMouseUp = (e: React.MouseEvent) => {
+    const wasPanning = isPanning;
     setIsPanning(false);
+    panAnchorRef.current = null;
+
+    // Box selection for armies
     if (selectionBox && dragStartPos && !moveMode) {
       if (containerRef.current) {
-        const topLeft = screenToWorld({ x: selectionBox.x, y: selectionBox.y }, camera.zoom, camera.pan, containerSize);
-        const bottomRight = screenToWorld({ x: selectionBox.x + selectionBox.w, y: selectionBox.y + selectionBox.h }, camera.zoom, camera.pan, containerSize);
+        const currentCam = cameraRef.current;
+        const topLeft = screenToWorld({ x: selectionBox.x, y: selectionBox.y }, currentCam, containerSize);
+        const bottomRight = screenToWorld({ x: selectionBox.x + selectionBox.w, y: selectionBox.y + selectionBox.h }, currentCam, containerSize);
         const svgX = Math.min(topLeft.x, bottomRight.x);
         const svgY = Math.min(topLeft.y, bottomRight.y);
         const svgW = Math.abs(bottomRight.x - topLeft.x);
         const svgH = Math.abs(bottomRight.y - topLeft.y);
         const selectedIds = Object.values(state.armies)
           .filter(army => {
-            const { getProvinceCentroid } = require('@/data/provinceGeometry');
             const centroid = getProvinceCentroid(army.provinceId);
             return centroid.x >= svgX && centroid.x <= svgX + svgW &&
                    centroid.y >= svgY && centroid.y <= svgY + svgH;
@@ -165,14 +200,66 @@ const WorldMap = () => {
           .map(a => a.id);
         setSelectedArmyIds(selectedIds);
       }
+      setSelectionBox(null);
+      setDragStartPos(null);
+      return;
     }
+
+    // Click (not drag) — pixel-based province/country selection
+    if (dragStartPos && !selectionBox) {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (rect) {
+        const localX = e.clientX - rect.left;
+        const localY = e.clientY - rect.top;
+        const dx = localX - dragStartPos.x;
+        const dy = localY - dragStartPos.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance <= dragThreshold) {
+          // This is a click — detect province via pixel lookup
+          const world = screenToWorld({ x: localX, y: localY }, cameraRef.current, containerSize);
+          const provId = ProvinceManager.getInstance().getProvinceAtWorld(world.x, world.y);
+          if (provId) {
+            const prov = state.provinces[provId];
+            if (prov) {
+              if (moveMode && selectedArmyIds.length > 0) {
+                // Move armies to clicked province
+                for (const armyId of selectedArmyIds) {
+                  dispatch({ type: 'MOVE_ARMY', armyId, targetProvinceId: provId });
+                }
+              } else if (showProvinces) {
+                // Zoomed in: select province + country
+                setSelectedCountryId(prov.countryId);
+                setSelectedProvinceId(provId);
+                setActivePanel('province');
+              } else {
+                // Zoomed out: select country only
+                setSelectedCountryId(prov.countryId);
+                setSelectedProvinceId(null);
+                setActivePanel('overview');
+              }
+            }
+          }
+        }
+      }
+    }
+
     setSelectionBox(null);
     setDragStartPos(null);
   };
+  const handleMouseLeave = useCallback(() => {
+    setIsPanning(false);
+    panAnchorRef.current = null;
+    setSelectionBox(null);
+    setDragStartPos(null);
+    setHoveredProvince(null);
+    setHoveredCountry(null);
+  }, []);
+
   const resetView = () => { setCamera(resetMapCamera()); };
 
   const zoomByStep = useCallback((factor: number) => {
-    applyZoomAtPoint(zoomRef.current * factor, {
+    applyZoomAtPoint(cameraRef.current.zoom * factor, {
       x: containerSize.width / 2,
       y: containerSize.height / 2,
     });
@@ -222,9 +309,9 @@ const WorldMap = () => {
     <MapProvider value={mapContextValue}>
       <div ref={containerRef} className="relative w-full h-full overflow-hidden select-none"
         style={{ background: 'hsl(var(--map-water))' }}
-        onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}>
+        onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseLeave}>
         <div className="absolute inset-0 pointer-events-none z-10" style={{ background: 'radial-gradient(ellipse at center, transparent 50%, hsl(var(--background) / 0.4) 100%)' }} />
-        <MapRenderer zoom={camera.zoom} pan={camera.pan} isPanning={isPanning} moveMode={moveMode} />
+        <MapRenderer camera={camera} isPanning={isPanning} moveMode={moveMode} />
         <LabelLayer camera={camera} containerSize={containerSize} />
         <MapTooltipLayer isPanning={isPanning} />
         <MapControls zoom={camera.zoom} onZoomIn={() => zoomByStep(1.2)} onZoomOut={() => zoomByStep(1 / 1.2)} onResetView={resetView} />

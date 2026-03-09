@@ -21,7 +21,7 @@ const TerrainLayer: React.FC = () => {
         fillRule="evenodd"
         stroke="hsl(var(--map-border))"
         strokeWidth={showProvinces ? 0.2 : 0.35}
-        opacity={showProvinces ? 0.12 : 0.2}
+        opacity={showProvinces ? 0.18 : 0.2}
         style={{ pointerEvents: 'none' }}
       />
       <rect

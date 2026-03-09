@@ -75,46 +75,4 @@ export const StaticGeometryLayer: React.FC<StaticGeometryLayerProps> = React.mem
 });
 StaticGeometryLayer.displayName = 'StaticGeometryLayer';
 
-/**
- * Country borders layer — renders thick borders between countries
- */
-interface CountryBordersLayerProps {
-  provinces: CachedProvinceData[];
-}
-
-export const CountryBordersLayer: React.FC<CountryBordersLayerProps> = React.memo(({ provinces }) => {
-  const countryGroups = useMemo(() => {
-    const countryProvinces = new Map<string, CachedProvinceData[]>();
-    for (const p of provinces) {
-      if (!countryProvinces.has(p.countryId)) {
-        countryProvinces.set(p.countryId, []);
-      }
-      countryProvinces.get(p.countryId)!.push(p);
-    }
-
-    const groups: React.ReactNode[] = [];
-    countryProvinces.forEach((provs, countryId) => {
-      const combinedPath = provs.map(p => p.geometry).join(' ');
-      groups.push(
-        <path
-          key={`country_border_${countryId}`}
-          d={combinedPath}
-          fill="none"
-          fillRule="evenodd"
-          stroke="hsl(var(--foreground))"
-          strokeWidth={1.2}
-          opacity={0.4}
-          strokeLinejoin="round"
-          vectorEffect="non-scaling-stroke"
-        />
-      );
-    });
-
-    return groups;
-  }, [provinces]);
-
-  return <g>{countryGroups}</g>;
-});
-CountryBordersLayer.displayName = 'CountryBordersLayer';
-
 export default ProvincePath;

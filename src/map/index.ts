@@ -9,7 +9,7 @@
  *   import { getMapDataLoader, applyGeometriesToProvinces } from '@/map';
  *   
  *   const loader = getMapDataLoader();
- *   await loader.loadProvincesFromUrl('/data/provinces.geojson');
+ *   await loader.loadProvincesFromUrl('/map/provinces.geojson');
  *   const newProvinces = applyGeometriesToProvinces(
  *     gameState.provinces,
  *     loader.getProvinceGeometries()
@@ -40,9 +40,16 @@
  */
 
 export { MapDataLoader, applyGeometriesToProvinces, getMapDataLoader } from './MapDataLoader';
-export { normalizeGeometry, geometryCentroid, signedRingArea } from './geometryValidator';
+export {
+  normalizeGeometry, geometryCentroid, largestPolygonCentroid, ringCentroid,
+  signedRingArea, ringSelfIntersects, cleanRing, validateGeometry, processGeometry,
+} from './geometryValidator';
+export { subdivideGeometry, computeTargetProvinces, clipRingToRect, getRegionName } from './subdividePolygon';
 export { projectPoint, ringToSvgPath, polygonToSvgPath, multiPolygonToSvgPath, normalizedGeometryToSvgPath, normalizedPolygonToSvgPath, getDefaultProjectionConfig } from './projection';
+export { ProvinceManager, packRGB, PROV_MAP_WIDTH, PROV_MAP_HEIGHT, PROV_SCALE_X, PROV_SCALE_Y } from './ProvinceManager';
+export type { ProvinceColorEntry, ProvinceMapData, ProvinceHighlightConfig } from './ProvinceManager';
 export type { ProjectionConfig } from './projection';
+export type { NormalizedGeometry, NormalizedPolygon, GeoRing, GeoPoint, GeometryValidation } from './geometryValidator';
 export type {
   GeoJSONFeatureCollection,
   GeoJSONFeature,

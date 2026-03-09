@@ -1,15 +1,16 @@
 /**
- * World Generator — Hybrid: Admin-0 countries + Admin-1 for USA
- * 
- * Uses world-land.geojson (admin-0) for all countries.
- * Uses ne_110m_admin_1 for US states subdivision.
- * Each non-US country = 1 province (the country itself).
+ * World Generator — Global real-world province generation
+ *
+ * Uses admin-0 (world-land.geojson) for country boundaries.
+ * Uses a real admin-1 province dataset (public/map/provinces.geojson)
+ * plus population metadata (public/map/province_data.json).
+ * Countries without admin-1 coverage fall back to a single province.
  */
 
 import { Country, Province, Building, TerrainType, Resources, TERRAIN_RESOURCES } from '@/types/game';
 import { randomFromKey, randomIntFromKey } from '@/lib/deterministicRandom';
-import { geometryCentroid, normalizeGeometry } from './geometryValidator';
-import { getDefaultProjectionConfig, normalizedGeometryToSvgPath } from './projection';
+import { geometryCentroid, largestPolygonCentroid, normalizeGeometry } from './geometryValidator';
+import { getDefaultProjectionConfig, normalizedGeometryToSvgPath, projectPoint } from './projection';
 import { updateProvinceGeometry, invalidateCentroidCache } from '@/data/provinceGeometry';
 
 // ─── Country overrides (preserve gameplay stats for key countries) ─────
@@ -128,10 +129,10 @@ function buildProvinceFromFeature(
   provinceName: string,
   population: number,
   svgPath: string,
-  geometry: any,
+  lat: number,
+  lng: number,
 ): Province {
-  const centroid = getCentroidFromGeometry(geometry);
-  const terrain = inferTerrain(centroid.lat, centroid.lng);
+  const terrain = inferTerrain(lat, lng);
   const development = randomIntFromKey(`${provinceKey}:dev`, 22, 88);
 
   return {
@@ -157,34 +158,45 @@ export interface WorldData {
   countries: Country[];
   provinces: Province[];
   countryPaths: Record<string, string>;
+  /** Pre-computed SVG-space centroids for country labels (uses largest polygon). */
+  countryCentroids: Record<string, { x: number; y: number }>;
 }
 
 /**
- * Load admin-0 for all countries + admin-1 for US states.
+ * Load admin-0 countries plus the real global admin-1 province dataset.
+ * Countries without admin-1 coverage fall back to a single province.
  */
 export async function generateWorld(): Promise<WorldData> {
   const cfg = getDefaultProjectionConfig();
 
   // Load both datasets in parallel
-  const [admin0Resp, admin1Resp] = await Promise.all([
+  const [admin0Resp, admin1Resp, provinceDataResp] = await Promise.all([
     fetch('/data/world-land.geojson'),
-    fetch('/data/ne_110m_admin_1.geojson'),
+    fetch('/map/provinces.geojson'),
+    fetch('/map/province_data.json'),
   ]);
   const admin0 = await admin0Resp.json();
   const admin1 = await admin1Resp.json();
+  const provinceData = await provinceDataResp.json() as Record<string, {
+    id: string;
+    name: string;
+    country: string;
+    population: number;
+    populationSource?: string;
+    type?: string;
+  }>;
 
   const countries: Country[] = [];
   const provinces: Province[] = [];
   const countryPaths: Record<string, string> = {};
+  const countryCentroids: Record<string, { x: number; y: number }> = {};
   let colorIdx = 0;
 
   const admin1ByCountry = new Map<string, any[]>();
   for (const feature of (admin1.features || [])) {
     const props = feature.properties;
-    const iso = props?.adm0_a3 || props?.iso_a2 || props?.iso_a3;
-    if (!iso || iso === '-99') continue;
-
-    const countryId = isoToGameId(iso);
+    const countryId = props?.countryId || isoToGameId(props?.adm0_a3 || props?.iso_a2 || props?.iso_a3);
+    if (!countryId) continue;
     if (!admin1ByCountry.has(countryId)) {
       admin1ByCountry.set(countryId, []);
     }
@@ -213,6 +225,15 @@ export async function generateWorld(): Promise<WorldData> {
 
     countryPaths[countryId] = svgPath;
 
+    // ── Compute label centroid (project largest polygon centroid) ──
+    const countryNormGeo = normalizeGeometry(feature.geometry);
+    if (countryNormGeo) {
+      const labelGeo = largestPolygonCentroid(countryNormGeo);
+      const projected = projectPoint(labelGeo.lng, labelGeo.lat, cfg);
+      countryCentroids[countryId] = { x: projected.x, y: projected.y };
+    }
+
+    // ── Resolve subdivision features from admin-1 dataset ──
     const subdivisionFeatures = admin1ByCountry.get(countryId) ?? [];
     const validSubdivisions = subdivisionFeatures
       .map((subdivisionFeature, index) => {
@@ -220,22 +241,22 @@ export async function generateWorld(): Promise<WorldData> {
         if (!subdivisionPath) return null;
 
         const subdivisionProps = subdivisionFeature.properties ?? {};
-        const rawName = subdivisionProps.name || subdivisionProps.name_en || subdivisionProps.shapeName || `${countryName} Province ${index + 1}`;
-        const provinceSuffix = slugifyProvinceKey(
-          subdivisionProps.postal || subdivisionProps.adm1_code || subdivisionProps.code_hasc || rawName,
-        );
+        const provinceId = subdivisionProps.provinceId || `${countryId}_${slugifyProvinceKey(subdivisionProps.adm1_code || subdivisionProps.code_hasc || subdivisionProps.name || index)}`;
+        const metadata = provinceData[provinceId];
+        const rawName = metadata?.name || subdivisionProps.provinceName || subdivisionProps.name || subdivisionProps.name_en || subdivisionProps.shapeName || `${countryName} Province ${index + 1}`;
 
         return {
           name: rawName,
-          id: `${countryId}_${provinceSuffix}`,
+          id: provinceId,
           path: subdivisionPath,
           geometry: subdivisionFeature.geometry,
+          population: metadata?.population,
         };
       })
-      .filter(Boolean) as { name: string; id: string; path: string; geometry: any }[];
+      .filter(Boolean) as { name: string; id: string; path: string; geometry: any; population?: number }[];
 
-    if (validSubdivisions.length > 1) {
-      const provincePopulation = Math.max(50_000, Math.round(popEst / validSubdivisions.length));
+    if (validSubdivisions.length > 0) {
+      // ── Path A: use real admin-1 subdivisions ──
       const usedIds = new Set<string>();
 
       for (const [index, subdivision] of validSubdivisions.entries()) {
@@ -245,18 +266,22 @@ export async function generateWorld(): Promise<WorldData> {
         }
         usedIds.add(provinceId);
 
+        const centroid = getCentroidFromGeometry(subdivision.geometry);
         provinces.push(
           buildProvinceFromFeature(
             countryId,
             provinceId,
             subdivision.name,
-            provincePopulation,
+            Math.max(10_000, subdivision.population ?? Math.round(popEst / Math.max(validSubdivisions.length, 1))),
             subdivision.path,
-            subdivision.geometry,
+            centroid.lat,
+            centroid.lng,
           ),
         );
       }
     } else {
+      // Fallback: single province from raw geometry when no admin-1 coverage exists
+      const centroid = getCentroidFromGeometry(feature.geometry);
       provinces.push(
         buildProvinceFromFeature(
           countryId,
@@ -264,7 +289,8 @@ export async function generateWorld(): Promise<WorldData> {
           countryName,
           popEst,
           svgPath,
-          feature.geometry,
+          centroid.lat,
+          centroid.lng,
         ),
       );
     }
@@ -281,7 +307,7 @@ export async function generateWorld(): Promise<WorldData> {
 
   console.log(`[WorldGenerator] Generated ${countries.length} countries, ${provinces.length} provinces`);
 
-  return { countries, provinces, countryPaths };
+  return { countries, provinces, countryPaths, countryCentroids };
 }
 
 function createCountry(
@@ -344,10 +370,14 @@ function createCountry(
 function computeAdjacency(allProvinces: Province[]): void {
   const cellSize = 30;
   const grid: Record<string, Province[]> = {};
+  const metrics = new Map<string, { centroid: [number, number]; size: number }>();
 
   for (const prov of allProvinces) {
-    const c = getApproxCentroid(prov.geometry);
-    const key = `${Math.floor(c[0] / cellSize)},${Math.floor(c[1] / cellSize)}`;
+    const centroid = getApproxCentroid(prov.geometry);
+    const size = getApproxSize(prov.geometry);
+    metrics.set(prov.id, { centroid, size });
+
+    const key = `${Math.floor(centroid[0] / cellSize)},${Math.floor(centroid[1] / cellSize)}`;
     if (!grid[key]) grid[key] = [];
     grid[key].push(prov);
   }
@@ -366,12 +396,14 @@ function computeAdjacency(allProvinces: Province[]): void {
             if (p1.id >= p2.id) continue;
             if (p1.adjacentProvinces.includes(p2.id)) continue;
 
-            const c1 = getApproxCentroid(p1.geometry);
-            const c2 = getApproxCentroid(p2.geometry);
+            const m1 = metrics.get(p1.id)!;
+            const m2 = metrics.get(p2.id)!;
+            const c1 = m1.centroid;
+            const c2 = m2.centroid;
             const dist = Math.sqrt((c1[0] - c2[0]) ** 2 + (c1[1] - c2[1]) ** 2);
 
-            const s1 = getApproxSize(p1.geometry);
-            const s2 = getApproxSize(p2.geometry);
+            const s1 = m1.size;
+            const s2 = m2.size;
             const threshold = (s1 + s2) * 0.7;
 
             if (dist < threshold) {

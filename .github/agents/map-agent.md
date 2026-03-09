@@ -1,171 +1,164 @@
-You are a senior game engine engineer specializing in map rendering systems for strategy games.
+You are a senior game engine engineer specialized in map engines for grand strategy games.
 
-Your task is to analyze this repository and completely stabilize and redesign the map system.
+Your task is to redesign the map system in this repository.
 
-The current system has the following problems:
+The current implementation uses GeoJSON polygons and currently only supports provinces for the United States.
 
-• Maximum zoom level is too limited
-• Province labels become blurry when zooming
-• Only United States provinces render correctly
-• Provinces in other countries do not load or render
-• Geometry becomes unstable at high zoom levels
-• Borders sometimes overlap or break
-• Rendering pipeline is fragile
+This architecture is fragile and does not scale to a global strategy game.
 
-Do NOT apply small patches.
+Instead, redesign the province system using a color-indexed province map similar to the system used in Paradox games (Europa Universalis, Hearts of Iron).
 
-Instead perform a full architectural review and refactor the map system where necessary.
+Do not apply small patches. Perform a structural refactor of the map system.
 
 ---
 
-STEP 1 — REPOSITORY ANALYSIS
+GOAL
 
-Analyze the entire repository and identify:
+Implement a high-performance global province system based on a color map.
 
-• Map renderer implementation
-• Camera / zoom system
-• Province loading logic
-• GeoJSON or map data loaders
-• Projection system
-• Province label rendering
-• Coordinate system used
-• Any filtering that limits rendering to the United States
-
-Explain the root causes of the current issues.
+Countries will remain polygon-based (GeoJSON), but provinces will be represented using a color-indexed image.
 
 ---
 
-STEP 2 — FIX ZOOM ARCHITECTURE
+NEW PROVINCE SYSTEM
 
-The map must support deep zoom levels.
+Create a province map image:
 
-The current system likely scales the entire canvas or map container.
+map/provinces.png
 
-This must be replaced with a proper camera system.
+Each unique RGB color represents one province.
 
-Requirements:
+Example:
 
-• camera-based zoom
-• no scaling of geometry buffers
-• stable rendering at all zoom levels
-• adjustable max zoom
+RGB(255,0,0) = province 1
+RGB(0,255,0) = province 2
+RGB(0,0,255) = province 3
 
-Implement a CameraController with:
+Create a data file:
 
-* position
-* zoom
-* bounds
-* smooth zooming
+map/province_data.json
 
----
+Example structure:
 
-STEP 3 — FIX LABEL RENDERING
-
-Province names must remain sharp regardless of zoom.
-
-Move label rendering to a dedicated layer:
-
-MapRenderer
-├─ ProvinceLayer
-├─ BorderLayer
-└─ LabelLayer
-
-Labels must:
-
-• not be affected by geometry scaling
-• dynamically adjust font size based on zoom
-• hide when zoom level is too low
+{
+"1": { "name": "California", "country": "USA" },
+"2": { "name": "Texas", "country": "USA" }
+}
 
 ---
 
-STEP 4 — FIX GLOBAL PROVINCE SUPPORT
+PROVINCE DETECTION
 
-Currently only the United States renders correctly.
+Implement province detection using pixel lookup.
 
-Find the cause:
+Algorithm:
 
-• hardcoded dataset
-• filtering logic
-• incorrect GeoJSON structure
-• projection issues
-
-Modify the loader to support world provinces.
-
-Ensure the system supports:
-
-• multipolygons
-• islands
-• enclaves
-• large countries
+1. Convert screen position → world coordinates
+2. Convert world coordinates → pixel coordinates on provinces.png
+3. Read pixel color
+4. Convert RGB → province ID
 
 ---
 
-STEP 5 — GEOMETRY STABILITY
-
-Implement geometry normalization:
-
-• polygon winding correction
-• multipolygon support
-• centroid calculation
-• geometry validation
-• prevention of self-intersections
-
----
-
-STEP 6 — RENDERING PIPELINE
-
-Implement a robust pipeline:
-
-GeoJSON
-↓
-Geometry validation
-↓
-Projection conversion
-↓
-Triangulation
-↓
-Renderable mesh
-↓
-Rendering layers
-
----
-
-STEP 7 — PERFORMANCE IMPROVEMENTS
-
-Implement:
-
-• geometry caching
-• spatial index (quadtree)
-• frustum culling
-• batched rendering
-
-The system must scale to thousands of provinces.
-
----
-
-STEP 8 — MAP ENGINE STRUCTURE
+MAP ENGINE ARCHITECTURE
 
 Create the following architecture:
 
 MapEngine
-├─ MapRenderer
-├─ CameraController
-├─ ProvinceLayer
-├─ LabelLayer
-├─ BorderRenderer
-├─ GeoDataLoader
-└─ SpatialIndex
+├ CameraController
+├ CountryLayer
+├ ProvinceLayer
+├ ProvinceManager
+├ LabelLayer
+└ InteractionSystem
 
 ---
 
-STEP 9 — OUTPUT
+COUNTRY RENDERING
+
+Keep the existing country rendering based on GeoJSON.
+
+Countries should:
+
+* render as polygons
+* support hover
+* support highlighting
+* support selection
+
+---
+
+PROVINCE LAYER
+
+ProvinceLayer should:
+
+* load provinces.png
+* cache pixel data
+* detect province on mouse click
+* support highlighting
+
+---
+
+ZOOM SYSTEM
+
+Implement a proper camera system.
+
+Requirements:
+
+* smooth zoom
+* deep zoom into provinces
+* full world visible at max zoom-out
+* world bounds clamping
+
+Zoom must NOT scale the entire canvas.
+
+Instead implement:
+
+screen_position = project(world_position, camera)
+
+---
+
+LABEL SYSTEM
+
+Implement a dedicated LabelLayer.
+
+Labels must:
+
+* remain sharp regardless of zoom
+* scale font size inversely with zoom
+* hide when zoomed out too far
+
+Label placement must use polygon centroids.
+
+---
+
+WORLD BOUNDS
+
+Ensure the maximum zoom-out shows the entire world perfectly inside the viewport.
+
+Compute bounds from the country geometry.
+
+---
+
+PERFORMANCE
+
+Implement:
+
+* province pixel caching
+* spatial index for countries
+* minimal draw calls
+* frustum culling
+
+The system must support thousands of provinces.
+
+---
+
+OUTPUT
 
 After analyzing the repository:
 
-1. List the exact causes of the current bugs.
-2. Show the improved map architecture.
-3. Provide the refactored implementation.
-4. Fix zoom limits and label blurriness.
-5. Ensure provinces render globally.
-
-Focus on stability, correctness, and scalability.
+1. Refactor the map engine architecture
+2. Implement the province color map system
+3. Replace the current US-only province logic
+4. Fix zoom limits
+5. Implement correct label placement
+6. Ensure the map works globally

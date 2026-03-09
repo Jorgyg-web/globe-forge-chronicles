@@ -4,6 +4,7 @@ import { GameState, GameAction, CountryId, ProvinceId, ArmyId } from '@/types/ga
 import { processAction } from '@/engine/GameEngine';
 import { hashStringToSeed, randomIntFromKey } from '@/lib/deterministicRandom';
 import { generateWorld, setCachedWorldData } from '@/map/worldGenerator';
+import { ProvinceManager } from '@/map/ProvinceManager';
 
 interface GameContextType {
   state: GameState;
@@ -151,6 +152,24 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         },
       } as any);
       setWorldLoading(false);
+
+      const buildProvinceMap = () => {
+        if (cancelled) return;
+        ProvinceManager.getInstance().buildFromProvinces(
+          worldData.provinces.map(province => ({
+            id: province.id,
+            name: province.name,
+            countryId: province.countryId,
+            geometry: province.geometry,
+          })),
+        );
+      };
+
+      if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+        (window as Window & { requestIdleCallback: (cb: () => void) => number }).requestIdleCallback(buildProvinceMap);
+      } else {
+        window.setTimeout(buildProvinceMap, 0);
+      }
     }).catch(err => {
       console.error('[GameProvider] Failed to load world data:', err);
       setWorldLoading(false);

@@ -1,14 +1,14 @@
 /**
  * Province SVG path geometries — generated via Mercator projection from
- * approximate real-world lat/lng polygon vertices.
+ * projected real-world province polygons.
  *
  * The projection maps [-180..180] lng × [-60..85] lat onto an 800×450 SVG
  * viewBox with 20px padding, using the same `projectPoint` function that
- * the GeoJSON loader uses. This means GeoJSON-loaded polygons and these
- * placeholders share the same coordinate space and can coexist.
+ * the GeoJSON loader uses. This means runtime-loaded province polygons and
+ * any bundled fallback shapes share the same coordinate space.
  *
- * To replace any province with real GeoJSON data, simply overwrite the
- * entry via `applyGeometriesToProvinces()`.
+ * Real province geometries are registered at runtime via
+ * `updateProvinceGeometry()`.
  */
 
 import { projectPoint, getDefaultProjectionConfig, type ProjectionConfig } from '@/map/projection';
@@ -151,33 +151,186 @@ export const PROVINCE_GEOMETRY: Record<string, string> = {
   aus_vic: poly([[140,-35],[148,-35],[148,-38],[144,-39],[140,-38]]),
 };
 
+type SvgPoint = { x: number; y: number };
+
+function closeRing(points: SvgPoint[]): SvgPoint[] {
+  if (points.length === 0) return points;
+  const first = points[0];
+  const last = points[points.length - 1];
+  if (first.x === last.x && first.y === last.y) return points;
+  return [...points, { ...first }];
+}
+
+function parseSvgPathRings(pathD: string): SvgPoint[][] {
+  const tokens = pathD.match(/[MLZmlz][^MLZmlz]*/g);
+  if (!tokens) return [];
+
+  const rings: SvgPoint[][] = [];
+  let current: SvgPoint[] = [];
+
+  for (const token of tokens) {
+    const cmd = token[0];
+    const nums = token.slice(1).trim().split(/[\s,]+/).map(Number).filter(Number.isFinite);
+
+    if (cmd === 'M' || cmd === 'm') {
+      if (current.length >= 3) {
+        rings.push(closeRing(current));
+      }
+      current = [];
+      for (let i = 0; i + 1 < nums.length; i += 2) {
+        current.push({ x: nums[i], y: nums[i + 1] });
+      }
+    } else if (cmd === 'L' || cmd === 'l') {
+      for (let i = 0; i + 1 < nums.length; i += 2) {
+        current.push({ x: nums[i], y: nums[i + 1] });
+      }
+    } else if ((cmd === 'Z' || cmd === 'z') && current.length >= 3) {
+      rings.push(closeRing(current));
+      current = [];
+    }
+  }
+
+  if (current.length >= 3) {
+    rings.push(closeRing(current));
+  }
+
+  return rings;
+}
+
+function signedRingArea(points: SvgPoint[]): number {
+  if (points.length < 4) return 0;
+  let area = 0;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    area += p1.x * p2.y - p2.x * p1.y;
+  }
+  return area / 2;
+}
+
+function polygonCentroid(points: SvgPoint[]): SvgPoint | null {
+  const area = signedRingArea(points);
+  if (Math.abs(area) < 1e-8) return null;
+
+  let cx = 0;
+  let cy = 0;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const cross = p1.x * p2.y - p2.x * p1.y;
+    cx += (p1.x + p2.x) * cross;
+    cy += (p1.y + p2.y) * cross;
+  }
+
+  return {
+    x: cx / (6 * area),
+    y: cy / (6 * area),
+  };
+}
+
+function pointInRing(point: SvgPoint, ring: SvgPoint[]): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i].x;
+    const yi = ring[i].y;
+    const xj = ring[j].x;
+    const yj = ring[j].y;
+
+    const intersect = ((yi > point.y) !== (yj > point.y))
+      && (point.x <= ((xj - xi) * (point.y - yi)) / ((yj - yi) || 1e-9) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+function distancePointToSegmentSquared(point: SvgPoint, a: SvgPoint, b: SvgPoint): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  if (dx === 0 && dy === 0) {
+    const px = point.x - a.x;
+    const py = point.y - a.y;
+    return px * px + py * py;
+  }
+
+  const t = Math.max(0, Math.min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy) / (dx * dx + dy * dy)));
+  const projX = a.x + t * dx;
+  const projY = a.y + t * dy;
+  const px = point.x - projX;
+  const py = point.y - projY;
+  return px * px + py * py;
+}
+
+function distanceToRingEdgesSquared(point: SvgPoint, ring: SvgPoint[]): number {
+  let best = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < ring.length - 1; i++) {
+    best = Math.min(best, distancePointToSegmentSquared(point, ring[i], ring[i + 1]));
+  }
+  return best;
+}
+
+function representativePointInRing(ring: SvgPoint[]): SvgPoint {
+  const bounds = ring.reduce((acc, point) => ({
+    minX: Math.min(acc.minX, point.x),
+    minY: Math.min(acc.minY, point.y),
+    maxX: Math.max(acc.maxX, point.x),
+    maxY: Math.max(acc.maxY, point.y),
+  }), { minX: Number.POSITIVE_INFINITY, minY: Number.POSITIVE_INFINITY, maxX: Number.NEGATIVE_INFINITY, maxY: Number.NEGATIVE_INFINITY });
+
+  const centroid = polygonCentroid(ring);
+  if (centroid && pointInRing(centroid, ring)) return centroid;
+
+  const center = { x: (bounds.minX + bounds.maxX) / 2, y: (bounds.minY + bounds.maxY) / 2 };
+  if (pointInRing(center, ring)) return center;
+
+  let search = { ...bounds };
+  let best: SvgPoint | null = null;
+  let bestScore = -1;
+
+  for (let pass = 0; pass < 4; pass++) {
+    const steps = 10;
+    const stepX = Math.max((search.maxX - search.minX) / steps, 1e-3);
+    const stepY = Math.max((search.maxY - search.minY) / steps, 1e-3);
+
+    for (let gx = 0; gx <= steps; gx++) {
+      for (let gy = 0; gy <= steps; gy++) {
+        const candidate = { x: search.minX + gx * stepX, y: search.minY + gy * stepY };
+        if (!pointInRing(candidate, ring)) continue;
+        const score = distanceToRingEdgesSquared(candidate, ring);
+        if (score > bestScore) {
+          best = candidate;
+          bestScore = score;
+        }
+      }
+    }
+
+    if (!best) continue;
+    search = {
+      minX: best.x - stepX,
+      minY: best.y - stepY,
+      maxX: best.x + stepX,
+      maxY: best.y + stepY,
+    };
+  }
+
+  return best ?? centroid ?? ring[0] ?? { x: 0, y: 0 };
+}
+
 /**
  * Compute the centroid of an SVG path string.
- * Parses M, L, Z commands and averages all vertex coordinates.
+ * Chooses a representative point inside the largest ring so labels stay within province bounds.
  */
 export function computeCentroid(pathD: string): { x: number; y: number } {
-  const coords: { x: number; y: number }[] = [];
-  const regex = /[ML]\s*([\d.]+)[,\s]+([\d.]+)/gi;
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(pathD)) !== null) {
-    coords.push({ x: parseFloat(match[1]), y: parseFloat(match[2]) });
-  }
-  if (coords.length === 0) return { x: 0, y: 0 };
-  const sumX = coords.reduce((s, c) => s + c.x, 0);
-  const sumY = coords.reduce((s, c) => s + c.y, 0);
-  return { x: sumX / coords.length, y: sumY / coords.length };
+  const rings = parseSvgPathRings(pathD);
+  if (rings.length === 0) return { x: 0, y: 0 };
+  const largestRing = rings.reduce((best, ring) => Math.abs(signedRingArea(ring)) > Math.abs(signedRingArea(best)) ? ring : best, rings[0]);
+  return representativePointInRing(largestRing);
 }
 
 /**
  * Compute bounding box of an SVG path string.
  */
 export function computeBounds(pathD: string): { minX: number; minY: number; maxX: number; maxY: number; w: number; h: number } {
-  const coords: { x: number; y: number }[] = [];
-  const regex = /[ML]\s*([\d.]+)[,\s]+([\d.]+)/gi;
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(pathD)) !== null) {
-    coords.push({ x: parseFloat(match[1]), y: parseFloat(match[2]) });
-  }
+  const coords = parseSvgPathRings(pathD).flat();
   if (coords.length === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0, w: 0, h: 0 };
   const minX = Math.min(...coords.map(c => c.x));
   const minY = Math.min(...coords.map(c => c.y));

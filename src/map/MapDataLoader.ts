@@ -9,7 +9,7 @@
  * 
  * Usage:
  *   const loader = new MapDataLoader();
- *   await loader.loadProvinces('/data/provinces.geojson');
+ *   await loader.loadProvinces('/map/provinces.geojson');
  *   const geometries = loader.getProvinceGeometries();
  *   applyGeometriesToGameState(gameState, geometries);
  */
