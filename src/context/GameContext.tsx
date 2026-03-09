@@ -1,3 +1,4 @@
+// Game state context and provider
 import React, { createContext, useContext, useReducer, useCallback, useEffect, useRef, useState } from 'react';
 import { GameState, GameAction, CountryId, ProvinceId, ArmyId } from '@/types/game';
 import { processAction } from '@/engine/GameEngine';
