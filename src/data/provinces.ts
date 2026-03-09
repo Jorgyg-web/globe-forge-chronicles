@@ -108,7 +108,7 @@ const PROVINCE_DEFS: ProvinceDef[] = [
 
   // ─── UK ───
   { id: 'gbr_en', countryId: 'gbr', name: 'England', pop: 56_000_000, terrain: 'urban', isCoastal: true, dev: 82,
-    resources: { food: 15, electronics: 30, money: 450 }, buildings: { aircraftFactory: 1, navalBase: 2 },
+    resources: { food: 15, electronics: 30, money: 450 }, buildings: { airbase: 1, navalBase: 2 },
     adjacent: ['gbr_sc', 'gbr_wa', 'fra_n'] },
   { id: 'gbr_sc', countryId: 'gbr', name: 'Scotland', pop: 5_500_000, terrain: 'mountain', isCoastal: true, dev: 75,
     resources: { oil: 40, food: 10, money: 100 },
