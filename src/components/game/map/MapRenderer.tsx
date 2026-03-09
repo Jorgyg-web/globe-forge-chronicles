@@ -1,5 +1,6 @@
 import React from 'react';
-import BaseMapLayer from './BaseMapLayer';
+import CountryLayer from './CountryLayer';
+import TerrainLayer from './TerrainLayer';
 import ProvinceLayer from './ProvinceLayer';
 import ArmyLayer from './ArmyLayer';
 
@@ -16,8 +17,9 @@ const MapRenderer: React.FC<MapRendererProps> = ({ zoom, pan, isPanning, moveMod
       style={{
         transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
         transformOrigin: "0 0",
-        transition: isPanning ? 'none' : 'transform 0.15s ease-out',
+        transition: isPanning ? 'none' : 'transform 0.18s cubic-bezier(0.2, 0, 0.2, 1)',
         cursor: moveMode ? 'crosshair' : isPanning ? 'grabbing' : 'grab',
+        willChange: 'transform',
       }}>
       <defs>
         <filter id="glow"><feGaussianBlur stdDeviation="3" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
@@ -41,8 +43,9 @@ const MapRenderer: React.FC<MapRendererProps> = ({ zoom, pan, isPanning, moveMod
       {/* Ocean / water base */}
       <rect width="800" height="450" fill="hsl(var(--map-water))" opacity="0.15" />
 
-      {/* World landmass base layer */}
-      <BaseMapLayer />
+      {/* Terrain / landmass base layer */}
+      <TerrainLayer />
+      <CountryLayer />
 
       <ProvinceLayer />
       <ArmyLayer />

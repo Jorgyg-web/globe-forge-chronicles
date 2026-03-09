@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { TERRAIN_COLORS } from './mapConstants';
 
 /**
@@ -39,6 +39,10 @@ export interface CachedProvinceData {
   buildingCount: number;
   centroidX: number;
   centroidY: number;
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
   boundsW: number;
   boundsH: number;
 }
@@ -79,32 +83,33 @@ interface CountryBordersLayerProps {
 }
 
 export const CountryBordersLayer: React.FC<CountryBordersLayerProps> = React.memo(({ provinces }) => {
-  // Group provinces by country to find border provinces
-  const countryProvinces = new Map<string, CachedProvinceData[]>();
-  for (const p of provinces) {
-    if (!countryProvinces.has(p.countryId)) {
-      countryProvinces.set(p.countryId, []);
+  const countryGroups = useMemo(() => {
+    const countryProvinces = new Map<string, CachedProvinceData[]>();
+    for (const p of provinces) {
+      if (!countryProvinces.has(p.countryId)) {
+        countryProvinces.set(p.countryId, []);
+      }
+      countryProvinces.get(p.countryId)!.push(p);
     }
-    countryProvinces.get(p.countryId)!.push(p);
-  }
 
-  // Render each country's provinces with a thick outer stroke
-  const countryGroups: React.ReactNode[] = [];
-  countryProvinces.forEach((provs, countryId) => {
-    // Combine all province paths for this country
-    const combinedPath = provs.map(p => p.geometry).join(' ');
-    countryGroups.push(
-      <path
-        key={`country_border_${countryId}`}
-        d={combinedPath}
-        fill="none"
-        stroke="hsl(var(--foreground))"
-        strokeWidth={1.2}
-        opacity={0.4}
-        strokeLinejoin="round"
-      />
-    );
-  });
+    const groups: React.ReactNode[] = [];
+    countryProvinces.forEach((provs, countryId) => {
+      const combinedPath = provs.map(p => p.geometry).join(' ');
+      groups.push(
+        <path
+          key={`country_border_${countryId}`}
+          d={combinedPath}
+          fill="none"
+          stroke="hsl(var(--foreground))"
+          strokeWidth={1.2}
+          opacity={0.4}
+          strokeLinejoin="round"
+        />
+      );
+    });
+
+    return groups;
+  }, [provinces]);
 
   return <g>{countryGroups}</g>;
 });

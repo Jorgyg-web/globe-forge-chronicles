@@ -4,6 +4,7 @@ import { MapProvider } from './map/MapContext';
 import MapRenderer from './map/MapRenderer';
 import MapTooltipLayer from './map/MapTooltipLayer';
 import MapControls from './map/MapControls';
+import { clampZoom, computeViewportWorldBounds, computeZoomPanAroundPoint, MAP_WORLD_HEIGHT, MAP_WORLD_WIDTH, screenToWorld } from './map/mapViewport';
 
 const WorldMap = () => {
   const { state, selectedArmyIds, setSelectedArmyIds, worldLoading } = useGame();
@@ -11,12 +12,17 @@ const WorldMap = () => {
   const [hoveredProvince, setHoveredProvince] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [isZooming, setIsZooming] = useState(false);
+  const zoomRef = useRef(zoom);
+  const panRef = useRef(pan);
+  const zoomEndTimeoutRef = useRef<number | null>(null);
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
   const [dragStartPos, setDragStartPos] = useState<{ x: number; y: number } | null>(null);
   const [selectionBox, setSelectionBox] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [containerSize, setContainerSize] = useState({ width: MAP_WORLD_WIDTH, height: MAP_WORLD_HEIGHT });
   const dragThreshold = 5;
 
   // Auto-activate move mode when a player army is selected and stationary
@@ -30,20 +36,89 @@ const WorldMap = () => {
     return false;
   }, [selectedArmyIds, state.armies, state.playerCountryId]);
 
-  const showProvinces = zoom >= 1.0;
-  const showDetails = zoom >= 1.8;
+  const showProvinces = zoom >= 1.8;
+  const showDetails = zoom > 3;
+
+  useEffect(() => {
+    zoomRef.current = zoom;
+  }, [zoom]);
+
+  useEffect(() => {
+    panRef.current = pan;
+  }, [pan]);
+
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element) return;
+
+    const updateSize = () => {
+      const rect = element.getBoundingClientRect();
+      setContainerSize({
+        width: Math.max(1, rect.width),
+        height: Math.max(1, rect.height),
+      });
+    };
+
+    updateSize();
+
+    const observer = new ResizeObserver(() => updateSize());
+    observer.observe(element);
+
+    return () => observer.disconnect();
+  }, []);
+
+  const applyZoomAtPoint = useCallback((nextZoom: number, anchor: { x: number; y: number }) => {
+    setIsZooming(true);
+    if (zoomEndTimeoutRef.current != null) {
+      window.clearTimeout(zoomEndTimeoutRef.current);
+    }
+
+    const nextView = computeZoomPanAroundPoint(
+      zoomRef.current,
+      clampZoom(nextZoom),
+      panRef.current,
+      containerSize,
+      anchor,
+    );
+
+    setZoom(nextView.zoom);
+    setPan(nextView.pan);
+
+    zoomEndTimeoutRef.current = window.setTimeout(() => {
+      setIsZooming(false);
+      zoomEndTimeoutRef.current = null;
+    }, 120);
+  }, [containerSize]);
 
   const handleWheel = useCallback((e: WheelEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    const delta = e.deltaY > 0 ? -0.25 : 0.25;
-    setZoom(prev => Math.min(5, Math.max(0.5, prev + delta)));
-  }, []);
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+
+    const zoomFactor = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+    applyZoomAtPoint(zoomRef.current * zoomFactor, {
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top,
+    });
+  }, [applyZoomAtPoint]);
 
   useEffect(() => {
-    const el = containerRef.current;
-    if (el) { el.addEventListener('wheel', handleWheel, { passive: false }); return () => el.removeEventListener('wheel', handleWheel); }
+    const element = containerRef.current;
+    if (!element) return;
+
+    element.addEventListener('wheel', handleWheel, { passive: false });
+
+    return () => {
+      element.removeEventListener('wheel', handleWheel);
+    };
   }, [handleWheel]);
+
+  useEffect(() => () => {
+    if (zoomEndTimeoutRef.current != null) {
+      window.clearTimeout(zoomEndTimeoutRef.current);
+    }
+  }, []);
 
   const handleMouseDown = (e: React.MouseEvent) => {
     const rect = containerRef.current?.getBoundingClientRect();
@@ -81,12 +156,13 @@ const WorldMap = () => {
   const handleMouseUp = () => {
     setIsPanning(false);
     if (selectionBox && dragStartPos && !moveMode) {
-      const rect = containerRef.current?.getBoundingClientRect();
-      if (rect) {
-        const svgX = selectionBox.x / zoom - pan.x / zoom;
-        const svgY = selectionBox.y / zoom - pan.y / zoom;
-        const svgW = selectionBox.w / zoom;
-        const svgH = selectionBox.h / zoom;
+      if (containerRef.current) {
+        const topLeft = screenToWorld({ x: selectionBox.x, y: selectionBox.y }, zoom, pan, containerSize);
+        const bottomRight = screenToWorld({ x: selectionBox.x + selectionBox.w, y: selectionBox.y + selectionBox.h }, zoom, pan, containerSize);
+        const svgX = Math.min(topLeft.x, bottomRight.x);
+        const svgY = Math.min(topLeft.y, bottomRight.y);
+        const svgW = Math.abs(bottomRight.x - topLeft.x);
+        const svgH = Math.abs(bottomRight.y - topLeft.y);
         const selectedIds = Object.values(state.armies)
           .filter(army => {
             const { getProvinceCentroid } = require('@/data/provinceGeometry');
@@ -102,6 +178,18 @@ const WorldMap = () => {
     setDragStartPos(null);
   };
   const resetView = () => { setZoom(1); setPan({ x: 0, y: 0 }); };
+
+  const zoomByStep = useCallback((factor: number) => {
+    applyZoomAtPoint(zoomRef.current * factor, {
+      x: containerSize.width / 2,
+      y: containerSize.height / 2,
+    });
+  }, [applyZoomAtPoint, containerSize.height, containerSize.width]);
+
+  const viewport = useMemo(
+    () => computeViewportWorldBounds(zoom, pan, containerSize),
+    [zoom, pan, containerSize],
+  );
 
   const moveTargets = useMemo(() => {
     if (!moveMode || selectedArmyIds.length === 0) return new Set<string>();
@@ -121,10 +209,11 @@ const WorldMap = () => {
   }, []);
 
   const mapContextValue = useMemo(() => ({
-    zoom, showProvinces, showDetails, moveMode, setMoveMode, moveTargets,
+    zoom, isZooming, showProvinces, showDetails, moveMode, setMoveMode, moveTargets,
     hoveredCountry, setHoveredCountry, hoveredProvince, setHoveredProvince,
     mousePos, containerRef: containerRef as React.RefObject<HTMLDivElement>,
-  }), [zoom, showProvinces, showDetails, moveMode, setMoveMode, moveTargets, hoveredCountry, hoveredProvince, mousePos]);
+    viewport,
+  }), [zoom, isZooming, showProvinces, showDetails, moveMode, setMoveMode, moveTargets, hoveredCountry, hoveredProvince, mousePos, viewport]);
 
   if (worldLoading) {
     return (
@@ -145,7 +234,7 @@ const WorldMap = () => {
         <div className="absolute inset-0 pointer-events-none z-10" style={{ background: 'radial-gradient(ellipse at center, transparent 50%, hsl(var(--background) / 0.4) 100%)' }} />
         <MapRenderer zoom={zoom} pan={pan} isPanning={isPanning} moveMode={moveMode} />
         <MapTooltipLayer isPanning={isPanning} />
-        <MapControls zoom={zoom} onZoomIn={() => setZoom(p => Math.min(5, p + 0.4))} onZoomOut={() => setZoom(p => Math.max(0.5, p - 0.4))} onResetView={resetView} />
+        <MapControls zoom={zoom} onZoomIn={() => zoomByStep(1.2)} onZoomOut={() => zoomByStep(1 / 1.2)} onResetView={resetView} />
         {selectionBox && (
           <div
             className="absolute border-2 border-primary bg-primary pointer-events-none"

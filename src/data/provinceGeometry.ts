@@ -188,6 +188,7 @@ export function computeBounds(pathD: string): { minX: number; minY: number; maxX
 
 /** Pre-computed centroids cache — invalidated when geometry updates */
 const centroidCache: Record<string, { x: number; y: number }> = {};
+const boundsCache: Record<string, { minX: number; minY: number; maxX: number; maxY: number; w: number; h: number }> = {};
 
 export function getProvinceCentroid(provinceId: string): { x: number; y: number } {
   if (centroidCache[provinceId]) return centroidCache[provinceId];
@@ -198,6 +199,15 @@ export function getProvinceCentroid(provinceId: string): { x: number; y: number 
   return c;
 }
 
+export function getProvinceBounds(provinceId: string): { minX: number; minY: number; maxX: number; maxY: number; w: number; h: number } {
+  if (boundsCache[provinceId]) return boundsCache[provinceId];
+  const geo = PROVINCE_GEOMETRY[provinceId];
+  if (!geo) return { minX: 0, minY: 0, maxX: 0, maxY: 0, w: 0, h: 0 };
+  const bounds = computeBounds(geo);
+  boundsCache[provinceId] = bounds;
+  return bounds;
+}
+
 /**
  * Update a province's geometry and invalidate its centroid cache.
  * Used by the GeoJSON loader when applying real geographic data.
@@ -205,6 +215,7 @@ export function getProvinceCentroid(provinceId: string): { x: number; y: number 
 export function updateProvinceGeometry(provinceId: string, svgPath: string): void {
   PROVINCE_GEOMETRY[provinceId] = svgPath;
   delete centroidCache[provinceId];
+  delete boundsCache[provinceId];
 }
 
 /**
@@ -213,5 +224,8 @@ export function updateProvinceGeometry(provinceId: string, svgPath: string): voi
 export function invalidateCentroidCache(): void {
   for (const key of Object.keys(centroidCache)) {
     delete centroidCache[key];
+  }
+  for (const key of Object.keys(boundsCache)) {
+    delete boundsCache[key];
   }
 }

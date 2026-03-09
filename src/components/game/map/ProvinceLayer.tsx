@@ -2,20 +2,20 @@ import React, { useMemo, useCallback } from 'react';
 import { useGame } from '@/context/GameContext';
 
 import { useMapContext } from './MapContext';
-import { getProvinceCentroid, computeBounds } from '@/data/provinceGeometry';
-import { StaticGeometryLayer, CachedProvinceData, CountryBordersLayer } from './ProvincePathCache';
+import { getProvinceBounds, getProvinceCentroid } from '@/data/provinceGeometry';
+import { StaticGeometryLayer, CachedProvinceData } from './ProvincePathCache';
 import { ProvinceInteractionLayer } from './ProvinceInteractionLayer';
 import { ProvinceOverlayLayer } from './ProvinceOverlayLayer';
+import { buildBoundsQuadtree, queryBoundsQuadtree } from './spatialIndex';
 
 // Zoom threshold for showing province borders
 const ZOOM_PROVINCE_BORDERS = 1.5;
 
 const ProvinceLayer: React.FC = () => {
   const { state, selectedCountryId, selectedProvinceId, setSelectedCountryId, setSelectedProvinceId, selectedArmyIds, setActivePanel, dispatch } = useGame();
-  const { zoom, moveMode, moveTargets, setHoveredCountry, setHoveredProvince } = useMapContext();
+  const { zoom, isZooming, moveMode, moveTargets, setHoveredCountry, setHoveredProvince, showProvinces, viewport } = useMapContext();
 
   const showProvinceBorders = zoom >= ZOOM_PROVINCE_BORDERS
-  const showProvinces = zoom > 1.2
 
   // Cache province render data — only recomputes when provinces or countries change
   const cachedProvinces: CachedProvinceData[] = useMemo(() => {
@@ -23,7 +23,7 @@ const ProvinceLayer: React.FC = () => {
     for (const prov of Object.values(state.provinces)) {
       const owner = state.countries[prov.countryId];
       const centroid = getProvinceCentroid(prov.id);
-      const bounds = computeBounds(prov.geometry);
+      const bounds = getProvinceBounds(prov.id);
       result.push({
         id: prov.id,
         countryId: prov.countryId,
@@ -36,12 +36,26 @@ const ProvinceLayer: React.FC = () => {
         buildingCount: prov.buildings.length,
         centroidX: centroid.x,
         centroidY: centroid.y,
+        minX: bounds.minX,
+        minY: bounds.minY,
+        maxX: bounds.maxX,
+        maxY: bounds.maxY,
         boundsW: bounds.w,
         boundsH: bounds.h,
       });
     }
     return result;
   }, [state.provinces, state.countries]);
+
+  const provinceSpatialIndex = useMemo(
+    () => buildBoundsQuadtree(cachedProvinces),
+    [cachedProvinces],
+  );
+
+  const visibleProvinces = useMemo(() => {
+    if (!showProvinces) return [];
+    return queryBoundsQuadtree(provinceSpatialIndex, viewport);
+  }, [provinceSpatialIndex, showProvinces, viewport]);
 
   // Troop counts per province — only recomputes when armies change
   const troopCounts = useMemo(() => {
@@ -81,7 +95,7 @@ const ProvinceLayer: React.FC = () => {
   const indicators = useMemo(() => {
     const items: React.ReactNode[] = [];
     for (const country of Object.values(state.countries)) {
-      const firstProv = cachedProvinces.find(p => p.countryId === country.id);
+      const firstProv = visibleProvinces.find(p => p.countryId === country.id);
       if (!firstProv) continue;
       const isPlayer = country.id === state.playerCountryId;
       const isAtWar = state.wars.some(w => w.active && (w.attackers.includes(country.id) || w.defenders.includes(country.id)));
@@ -101,27 +115,29 @@ const ProvinceLayer: React.FC = () => {
       }
     }
     return items;
-  }, [state.countries, state.wars, state.playerCountryId, cachedProvinces]);
+  }, [state.countries, state.wars, state.playerCountryId, visibleProvinces]);
+
+  if (!showProvinces) return null;
 
   return (
     <>
       {/* Layer 1: Static province fills — rarely re-renders */}
-      <StaticGeometryLayer provinces={cachedProvinces} showProvinceBorders={showProvinceBorders} />
+      <StaticGeometryLayer provinces={visibleProvinces} showProvinceBorders={showProvinceBorders} />
 
-      {/* Layer 2: Country borders — always visible, thicker than province borders */}
-      <CountryBordersLayer provinces={cachedProvinces} />
-
-      {/* Layer 3: Invisible interaction hit targets — event delegation */}
+      {/* While zooming with many provinces visible, keep only the cheapest layer alive */}
+      {isZooming ? null : (
+        <>
+      {/* Layer 2: Invisible interaction hit targets — event delegation */}
       <ProvinceInteractionLayer
-        provinces={cachedProvinces}
+        provinces={visibleProvinces}
         onProvinceClick={handleProvinceClick}
         onProvinceEnter={handleProvinceEnter}
         onProvinceLeave={handleProvinceLeave}
       />
 
-      {/* Layer 4: Dynamic overlays (selection, labels, details) */}
+      {/* Layer 3: Dynamic overlays (selection, labels, details) */}
       <ProvinceOverlayLayer
-        provinces={cachedProvinces}
+        provinces={visibleProvinces}
         selectedProvinceId={selectedProvinceId}
         selectedCountryId={selectedCountryId}
         moveTargets={moveTargets}
@@ -131,6 +147,8 @@ const ProvinceLayer: React.FC = () => {
 
       {/* Country indicators */}
       {indicators}
+        </>
+      )}
     </>
   );
 };

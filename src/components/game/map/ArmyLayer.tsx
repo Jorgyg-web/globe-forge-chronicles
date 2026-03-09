@@ -4,6 +4,7 @@ import { useMapContext } from './MapContext';
 import { Army } from '@/types/game';
 import { getProvinceCentroid } from '@/data/provinceGeometry';
 import { UNIT_STATS } from '@/data/unitStats';
+import { boundsIntersectViewport } from './mapViewport';
 
 const TERRAIN_MOVEMENT_COST: Record<string, number> = {
   plains: 1, coastal: 1, urban: 0.8, forest: 1.4, desert: 1.3, mountain: 2, arctic: 1.8,
@@ -33,15 +34,18 @@ function getDominantUnitIcon(army: Army): string {
 
 const ArmyLayer: React.FC = () => {
   const { state, selectedArmyId, selectedArmyIds, toggleArmySelection, setActivePanel } = useGame();
-  const { zoom } = useMapContext();
-  // Show armies at medium-close zoom (2.0+), movement arrows slightly earlier (1.8+)
-  const showArmies = zoom >= 2.0;
-  const showMovement = zoom >= 1.8;
+  const { zoom, isZooming, viewport } = useMapContext();
+  const showArmies = zoom > 3;
+  const showMovement = zoom > 3;
 
   const armyPositions = useMemo(() => {
     const positions: { army: Army; x: number; y: number; targetX?: number; targetY?: number }[] = [];
     for (const army of Object.values(state.armies)) {
       const centroid = getProvinceCentroid(army.provinceId);
+      if (!boundsIntersectViewport({ minX: centroid.x, minY: centroid.y, maxX: centroid.x, maxY: centroid.y }, viewport)) {
+        continue;
+      }
+
       let targetX: number | undefined, targetY: number | undefined;
       if (army.targetProvinceId) {
         const tc = getProvinceCentroid(army.targetProvinceId);
@@ -51,14 +55,14 @@ const ArmyLayer: React.FC = () => {
       positions.push({ army, x: centroid.x, y: centroid.y, targetX, targetY });
     }
     return positions;
-  }, [state.armies]);
+  }, [state.armies, viewport]);
 
   const battlePositions = useMemo(() => {
     return (state.activeBattles ?? []).map(b => {
       const c = getProvinceCentroid(b.provinceId);
       return { ...b, x: c.x, y: c.y };
-    });
-  }, [state.activeBattles]);
+    }).filter(b => boundsIntersectViewport({ minX: b.x, minY: b.y, maxX: b.x, maxY: b.y }, viewport));
+  }, [state.activeBattles, viewport]);
 
   const handleArmyClick = (armyId: string, e?: React.MouseEvent) => {
     toggleArmySelection(armyId, e?.shiftKey ?? false);
@@ -68,7 +72,7 @@ const ArmyLayer: React.FC = () => {
   return (
     <>
       {/* Movement arrows with ETA */}
-      {showMovement && armyPositions.filter(a => a.targetX != null).map(({ army, x, y, targetX, targetY }) => {
+      {!isZooming && showMovement && armyPositions.filter(a => a.targetX != null).map(({ army, x, y, targetX, targetY }) => {
         if (!targetX || !targetY) return null;
         const isPlayer = army.countryId === state.playerCountryId;
         const progress = army.movementProgress ?? 0;
@@ -128,7 +132,7 @@ const ArmyLayer: React.FC = () => {
       })}
 
       {/* Stationary armies */}
-      {showArmies && armyPositions.filter(a => !a.army.targetProvinceId).map(({ army, x, y }) => {
+      {!isZooming && showArmies && armyPositions.filter(a => !a.army.targetProvinceId).map(({ army, x, y }) => {
         const totalUnits = army.units.reduce((s, u) => s + u.count, 0);
         const isPlayer = army.countryId === state.playerCountryId;
         const isSelected = selectedArmyIds.includes(army.id);
@@ -185,7 +189,7 @@ const ArmyLayer: React.FC = () => {
       })}
 
       {/* Battle indicators */}
-      {battlePositions.map((b, i) => (
+      {!isZooming && battlePositions.map((b, i) => (
         <g key={`battle_${i}`}>
           <circle cx={b.x} cy={b.y} r={5} fill="hsl(var(--danger))" opacity={0.2} filter="url(#battleGlow)">
             <animate attributeName="r" values="5;8;5" dur="0.8s" repeatCount="indefinite" />

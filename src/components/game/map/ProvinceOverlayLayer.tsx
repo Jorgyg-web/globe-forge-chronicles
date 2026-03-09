@@ -11,11 +11,10 @@ interface ProvinceOverlayLayerProps {
 }
 
 // Zoom thresholds - adjusted for better readability
-const ZOOM_COUNTRY_LABELS = 0.6
 const ZOOM_PROVINCE_BORDERS = 1.8
 const ZOOM_MAJOR_LABELS = 2.4
-const ZOOM_ALL_LABELS = 3.2
-const ZOOM_DETAILS = 3.8        // close: show stats, morale bars, building counts
+const ZOOM_ALL_LABELS = 3
+const ZOOM_DETAILS = 3          // close: show stats, morale bars, building counts
 
 interface LabelBounds {
   x: number;
@@ -53,41 +52,6 @@ function filterOverlappingLabels<T extends { x: number; y: number; width: number
 export const ProvinceOverlayLayer: React.FC<ProvinceOverlayLayerProps> = React.memo(({
   provinces, selectedProvinceId, selectedCountryId, moveTargets, zoom, troopCounts,
 }) => {
-  // Group provinces by country for country-level labels
-  const countryLabels = useMemo(() => {
-    if (zoom >= ZOOM_ALL_LABELS) return []; // province labels take over
-    const byCountry: Record<string, { name: string; cx: number; cy: number; count: number; totalW: number; maxArea: number }> = {};
-    for (const p of provinces) {
-      if (!byCountry[p.countryId]) {
-        byCountry[p.countryId] = { name: '', cx: 0, cy: 0, count: 0, totalW: 0, maxArea: 0 };
-      }
-      const entry = byCountry[p.countryId];
-      // Weight centroid by province area (boundsW * boundsH as proxy)
-      const area = p.boundsW * p.boundsH;
-      entry.cx += p.centroidX * area;
-      entry.cy += p.centroidY * area;
-      entry.totalW += area;
-      entry.count++;
-      if (area > entry.maxArea) {
-        entry.name = p.name;
-        entry.maxArea = area;
-      }
-    }
-    // Use country name from first province's countryId
-    const results: { countryId: string; cx: number; cy: number; name: string; provCount: number }[] = [];
-    for (const [countryId, entry] of Object.entries(byCountry)) {
-      if (entry.totalW === 0) continue;
-      results.push({
-        countryId,
-        cx: entry.cx / entry.totalW,
-        cy: entry.cy / entry.totalW,
-        name: countryId.toUpperCase(),
-        provCount: entry.count,
-      });
-    }
-    return results;
-  }, [provinces, zoom]);
-
   // Filter province labels to avoid overlaps
   const visibleProvinceLabels = useMemo(() => {
     const showMajorLabels = zoom >= ZOOM_MAJOR_LABELS && zoom < ZOOM_ALL_LABELS;
@@ -153,34 +117,6 @@ export const ProvinceOverlayLayer: React.FC<ProvinceOverlayLayerProps> = React.m
         if (!p) return null;
         return <path d={p.geometry} fill="hsl(var(--primary))" opacity={0.5} stroke="hsl(var(--primary))" strokeWidth={1.5} />;
       })()}
-
-      {/* === ZOOM LEVEL: Country labels (zoomed out) === */}
-      {zoom < ZOOM_ALL_LABELS && countryLabels
-        .filter(c => c.provCount >= 1)
-        .map(c => {
-          // Scale font: bigger when zoomed out, smaller as we approach province-label zoom
-          const fontSize = Math.max(3, Math.min(8, 10 / zoom));
-          return (
-            <g key={`country_${c.countryId}`}>
-              {/* Text shadow for readability */}
-              <text x={c.cx} y={c.cy}
-                textAnchor="middle" dominantBaseline="middle"
-                fontSize={fontSize} fill="hsl(var(--background))"
-                fontFamily="'JetBrains Mono', monospace" fontWeight={800}
-                opacity={0.8} letterSpacing={1}
-                stroke="hsl(var(--background))" strokeWidth={2}>
-                {c.name.length > 6 ? c.name.slice(0, 5) : c.name}
-              </text>
-              <text x={c.cx} y={c.cy}
-                textAnchor="middle" dominantBaseline="middle"
-                fontSize={fontSize} fill="hsl(var(--foreground))"
-                fontFamily="'JetBrains Mono', monospace" fontWeight={800}
-                opacity={0.85} letterSpacing={1}>
-                {c.name.length > 6 ? c.name.slice(0, 5) : c.name}
-              </text>
-            </g>
-          );
-        })}
 
       {/* === ZOOM LEVEL: Province labels (filtered for overlaps) === */}
       {visibleProvinceLabels.map(p => (

@@ -128,6 +128,58 @@ function keyedChance(key: string, chance: number): boolean {
   return randomFromKey(key) < chance;
 }
 
+function slugifyProvinceKey(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 24) || 'region';
+}
+
+function createProvinceBuildings(dev: number): Building[] {
+  const buildings: Building[] = [];
+  if (dev >= 30) buildings.push({ type: 'infrastructure', level: Math.min(3, Math.floor(dev / 25)) });
+  if (dev >= 50) buildings.push({ type: 'industrialComplex', level: Math.min(3, Math.floor(dev / 30)) });
+  return buildings;
+}
+
+function createProvinceResourceProduction(provinceKey: string, terrain: TerrainType, population: number, development: number): Resources {
+  return {
+    food: terrain === 'plains' ? 30 : terrain === 'forest' ? 15 : terrain === 'jungle' ? 20 : 5,
+    steel: terrain === 'mountain' ? 25 : keyedChance(`${provinceKey}:steel`, 0.4) ? 10 : 0,
+    oil: terrain === 'desert' ? 20 : terrain === 'jungle' ? 5 : keyedChance(`${provinceKey}:oil`, 0.3) ? 10 : 0,
+    rareMetals: development > 60 ? 15 : terrain === 'mountain' ? 8 : 0,
+    manpower: Math.floor(population / 100000) + development * 2,
+  };
+}
+
+function buildProvinceFromFeature(
+  countryId: string,
+  provinceKey: string,
+  provinceName: string,
+  population: number,
+  svgPath: string,
+  geometry: any,
+): Province {
+  const centroid = getCentroidFromGeometry(geometry);
+  const terrain = inferTerrain(centroid.lat, centroid.lng);
+  const development = randomIntFromKey(`${provinceKey}:dev`, 22, 88);
+
+  return {
+    id: provinceKey,
+    countryId,
+    originalCountryId: countryId,
+    name: provinceName,
+    population,
+    morale: randomIntFromKey(`${provinceKey}:morale`, 50, 89),
+    stability: randomIntFromKey(`${provinceKey}:stability`, 42, 82),
+    corruption: randomIntFromKey(`${provinceKey}:corruption`, 5, 28),
+    resourceProduction: createProvinceResourceProduction(provinceKey, terrain, population, development),
+    buildings: createProvinceBuildings(development),
+    terrain,
+    isCoastal: keyedChance(`${provinceKey}:coastal`, 0.5),
+    development,
+    adjacentProvinces: [],
+    geometry: svgPath,
+  };
+}
+
 export interface WorldData {
   countries: Country[];
   provinces: Province[];
@@ -148,22 +200,23 @@ export async function generateWorld(): Promise<WorldData> {
   const admin0 = await admin0Resp.json();
   const admin1 = await admin1Resp.json();
 
-  // Parse US states from admin-1
-  const usStates: any[] = [];
-  for (const feature of (admin1.features || [])) {
-    const props = feature.properties;
-    if (props?.adm0_a3 === 'USA') {
-      usStates.push(feature);
-    }
-  }
-
   const countries: Country[] = [];
   const provinces: Province[] = [];
   const countryPaths: Record<string, string> = {};
   let colorIdx = 0;
 
-  // Skip USA from admin-0 (we'll use admin-1 states instead)
-  const skipCountryIds = new Set(['usa']);
+  const admin1ByCountry = new Map<string, any[]>();
+  for (const feature of (admin1.features || [])) {
+    const props = feature.properties;
+    const iso = props?.adm0_a3 || props?.iso_a2 || props?.iso_a3;
+    if (!iso || iso === '-99') continue;
+
+    const countryId = isoToGameId(iso);
+    if (!admin1ByCountry.has(countryId)) {
+      admin1ByCountry.set(countryId, []);
+    }
+    admin1ByCountry.get(countryId)!.push(feature);
+  }
 
   for (const feature of admin0.features) {
     const props = feature.properties;
@@ -172,8 +225,6 @@ export async function generateWorld(): Promise<WorldData> {
     if (!iso || iso === '-99') continue;
 
     const countryId = isoToGameId(iso);
-    if (skipCountryIds.has(countryId)) continue;
-
     const countryName = props.name || props.admin || iso;
     const continent = props.continent || 'Unknown';
     const popEst = props.pop_est || 1_000_000;
@@ -184,93 +235,66 @@ export async function generateWorld(): Promise<WorldData> {
     countries.push(country);
     colorIdx++;
 
-    // Create single province for this country
     const svgPath = geometryToSvgPath(feature.geometry, cfg);
     if (!svgPath) continue;
 
     countryPaths[countryId] = svgPath;
 
-    const centroid = getCentroidFromGeometry(feature.geometry);
-    const terrain = inferTerrain(centroid.lat, centroid.lng);
-    const dev = randomIntFromKey(`${countryId}:province:dev`, 20, 79);
-    const buildings: Building[] = [];
-    if (dev >= 30) buildings.push({ type: 'infrastructure', level: Math.min(3, Math.floor(dev / 25)) });
-    if (dev >= 50) buildings.push({ type: 'industrialComplex', level: Math.min(3, Math.floor(dev / 30)) });
+    const subdivisionFeatures = admin1ByCountry.get(countryId) ?? [];
+    const validSubdivisions = subdivisionFeatures
+      .map((subdivisionFeature, index) => {
+        const subdivisionPath = geometryToSvgPath(subdivisionFeature.geometry, cfg);
+        if (!subdivisionPath) return null;
 
-    provinces.push({
-      id: `${countryId}_main`,
-      countryId,
-      originalCountryId: countryId,
-      name: countryName,
-      population: popEst,
-      morale: randomIntFromKey(`${countryId}:province:morale`, 50, 89),
-      stability: randomIntFromKey(`${countryId}:province:stability`, 40, 79),
-      corruption: randomIntFromKey(`${countryId}:province:corruption`, 5, 34),
-      resourceProduction: {
-        food: terrain === 'plains' ? 30 : terrain === 'forest' ? 15 : terrain === 'jungle' ? 20 : 5,
-        steel: terrain === 'mountain' ? 25 : keyedChance(`${countryId}:province:steel`, 0.4) ? 10 : 0,
-        oil: terrain === 'desert' ? 20 : terrain === 'jungle' ? 5 : keyedChance(`${countryId}:province:oil`, 0.3) ? 10 : 0,
-        rareMetals: dev > 60 ? 15 : terrain === 'mountain' ? 8 : 0,
-        manpower: Math.floor(popEst / 100000) + dev * 2,
-      },
-      buildings,
-      terrain,
-      isCoastal: keyedChance(`${countryId}:province:coastal`, 0.5),
-      development: dev,
-      adjacentProvinces: [],
-      geometry: svgPath,
-    });
-  }
+        const subdivisionProps = subdivisionFeature.properties ?? {};
+        const rawName = subdivisionProps.name || subdivisionProps.name_en || subdivisionProps.shapeName || `${countryName} Province ${index + 1}`;
+        const provinceSuffix = slugifyProvinceKey(
+          subdivisionProps.postal || subdivisionProps.adm1_code || subdivisionProps.code_hasc || rawName,
+        );
 
-  // Now add USA with admin-1 states
-  {
-    const override = COUNTRY_OVERRIDES['usa'];
-    const usCountry = createCountry('usa', 'United States', 'USA', 'North America', 331_000_000, override, colorIdx);
-    countries.push(usCountry);
-    colorIdx++;
+        return {
+          name: rawName,
+          id: `${countryId}_${provinceSuffix}`,
+          path: subdivisionPath,
+          geometry: subdivisionFeature.geometry,
+        };
+      })
+      .filter(Boolean) as { name: string; id: string; path: string; geometry: any }[];
 
-    const allSvgParts: string[] = [];
-    for (const feature of usStates) {
-      const props = feature.properties;
-      const stateName = props.name || props.name_en || 'Unknown State';
-      const svgPath = geometryToSvgPath(feature.geometry, cfg);
-      if (!svgPath) continue;
-      allSvgParts.push(svgPath);
+    if (validSubdivisions.length > 1) {
+      const provincePopulation = Math.max(50_000, Math.round(popEst / validSubdivisions.length));
+      const usedIds = new Set<string>();
 
-      const centroid = getCentroidFromGeometry(feature.geometry);
-      const terrain = inferTerrain(centroid.lat, centroid.lng);
-      const provId = `usa_${(props.postal || props.adm1_code || stateName).toLowerCase().replace(/[^a-z0-9]/g, '')}`;
-      const statePop = Math.round(331_000_000 / Math.max(usStates.length, 1));
-      const dev = randomIntFromKey(`${provId}:dev`, 40, 89);
-      const buildings: Building[] = [];
-      if (dev >= 30) buildings.push({ type: 'infrastructure', level: Math.min(3, Math.floor(dev / 25)) });
-      if (dev >= 50) buildings.push({ type: 'industrialComplex', level: Math.min(3, Math.floor(dev / 30)) });
+      for (const [index, subdivision] of validSubdivisions.entries()) {
+        let provinceId = subdivision.id;
+        if (usedIds.has(provinceId)) {
+          provinceId = `${provinceId}${index + 1}`;
+        }
+        usedIds.add(provinceId);
 
-      provinces.push({
-        id: provId,
-        countryId: 'usa',
-        originalCountryId: 'usa',
-        name: stateName,
-        population: statePop,
-        morale: randomIntFromKey(`${provId}:morale`, 50, 89),
-        stability: randomIntFromKey(`${provId}:stability`, 50, 79),
-        corruption: randomIntFromKey(`${provId}:corruption`, 5, 24),
-        resourceProduction: {
-        food: terrain === 'plains' ? 30 : terrain === 'forest' ? 15 : terrain === 'jungle' ? 20 : 5,
-        steel: terrain === 'mountain' ? 25 : keyedChance(`${provId}:steel`, 0.4) ? 10 : 0,
-        oil: terrain === 'desert' ? 20 : terrain === 'jungle' ? 5 : keyedChance(`${provId}:oil`, 0.3) ? 10 : 0,
-        rareMetals: dev > 60 ? 15 : terrain === 'mountain' ? 8 : 0,
-        manpower: Math.floor(statePop / 100000) + dev * 2,
-        },
-        buildings,
-        terrain,
-        isCoastal: ['wa', 'or', 'ca', 'tx', 'fl', 'ny', 'ma', 'me', 'ct', 'nj', 'md', 'va', 'nc', 'sc', 'ga', 'al', 'ms', 'la', 'hi', 'ak'].includes((props.postal || '').toLowerCase()),
-        development: dev,
-        adjacentProvinces: [],
-        geometry: svgPath,
-      });
+        provinces.push(
+          buildProvinceFromFeature(
+            countryId,
+            provinceId,
+            subdivision.name,
+            provincePopulation,
+            subdivision.path,
+            subdivision.geometry,
+          ),
+        );
+      }
+    } else {
+      provinces.push(
+        buildProvinceFromFeature(
+          countryId,
+          `${countryId}_main`,
+          countryName,
+          popEst,
+          svgPath,
+          feature.geometry,
+        ),
+      );
     }
-    countryPaths['usa'] = allSvgParts.join(' ');
   }
 
   // Compute adjacency

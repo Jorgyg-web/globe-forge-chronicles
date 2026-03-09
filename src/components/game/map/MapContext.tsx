@@ -1,7 +1,9 @@
 import React, { createContext, useContext } from 'react';
+import { WorldViewport } from './mapViewport';
 
 export interface MapContextType {
   zoom: number;
+  isZooming: boolean;
   showProvinces: boolean;
   showDetails: boolean;
   moveMode: boolean;
@@ -13,6 +15,7 @@ export interface MapContextType {
   setHoveredProvince: (id: string | null) => void;
   mousePos: { x: number; y: number };
   containerRef: React.RefObject<HTMLDivElement>;
+  viewport: WorldViewport;
 }
 
 const MapContext = createContext<MapContextType | null>(null);

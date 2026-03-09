@@ -6,12 +6,12 @@ import { getProvincesForCountry } from '@/data/provinces';
 
 const MapTooltipLayer: React.FC<{ isPanning: boolean }> = ({ isPanning }) => {
   const { state } = useGame();
-  const { hoveredCountry, hoveredProvince, moveMode, moveTargets, mousePos, containerRef } = useMapContext();
+  const { hoveredCountry, hoveredProvince, isZooming, moveMode, moveTargets, mousePos, containerRef } = useMapContext();
 
   const hoveredProvData = hoveredProvince ? state.provinces[hoveredProvince] : null;
   const hoveredData = hoveredCountry && !hoveredProvData ? state.countries[hoveredCountry] : null;
 
-  if (isPanning) return null;
+  if (isPanning || isZooming) return null;
 
   const left = mousePos.x - (containerRef.current?.getBoundingClientRect().left ?? 0) + 16;
   const top = mousePos.y - (containerRef.current?.getBoundingClientRect().top ?? 0) - 10;
