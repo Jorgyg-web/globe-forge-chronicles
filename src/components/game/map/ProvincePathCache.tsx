@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { TERRAIN_COLORS } from './mapConstants';
 
 /**
@@ -10,13 +10,14 @@ interface ProvincePathProps {
   terrain: string;
   ownerColor: string;
   isConquered: boolean;
+  showBorder: boolean;
 }
 
-const ProvincePath: React.FC<ProvincePathProps> = React.memo(({ geometry, terrain, ownerColor, isConquered }) => {
+const ProvincePath: React.FC<ProvincePathProps> = React.memo(({ geometry, terrain, ownerColor, isConquered, showBorder }) => {
   const terrainColor = TERRAIN_COLORS[terrain];
   return (
     <>
-      <path d={geometry} fill={terrainColor} opacity={0.5} stroke="hsl(var(--map-border))" strokeWidth={0.3} />
+      <path d={geometry} fill={terrainColor} opacity={0.5} stroke={showBorder ? 'hsl(var(--map-border))' : 'none'} strokeWidth={0.3} />
       <path d={geometry} fill={ownerColor} opacity={isConquered ? 0.15 : 0.2} style={{ pointerEvents: 'none' }} />
     </>
   );
@@ -48,9 +49,10 @@ export interface CachedProvinceData {
  */
 interface StaticGeometryLayerProps {
   provinces: CachedProvinceData[];
+  showProvinceBorders: boolean;
 }
 
-export const StaticGeometryLayer: React.FC<StaticGeometryLayerProps> = React.memo(({ provinces }) => {
+export const StaticGeometryLayer: React.FC<StaticGeometryLayerProps> = React.memo(({ provinces, showProvinceBorders }) => {
   return (
     <g>
       {provinces.map(p => (
@@ -61,11 +63,51 @@ export const StaticGeometryLayer: React.FC<StaticGeometryLayerProps> = React.mem
           terrain={p.terrain}
           ownerColor={p.ownerColor}
           isConquered={p.isConquered}
+          showBorder={showProvinceBorders}
         />
       ))}
     </g>
   );
 });
 StaticGeometryLayer.displayName = 'StaticGeometryLayer';
+
+/**
+ * Country borders layer — renders thick borders between countries
+ */
+interface CountryBordersLayerProps {
+  provinces: CachedProvinceData[];
+}
+
+export const CountryBordersLayer: React.FC<CountryBordersLayerProps> = React.memo(({ provinces }) => {
+  // Group provinces by country to find border provinces
+  const countryProvinces = new Map<string, CachedProvinceData[]>();
+  for (const p of provinces) {
+    if (!countryProvinces.has(p.countryId)) {
+      countryProvinces.set(p.countryId, []);
+    }
+    countryProvinces.get(p.countryId)!.push(p);
+  }
+
+  // Render each country's provinces with a thick outer stroke
+  const countryGroups: React.ReactNode[] = [];
+  countryProvinces.forEach((provs, countryId) => {
+    // Combine all province paths for this country
+    const combinedPath = provs.map(p => p.geometry).join(' ');
+    countryGroups.push(
+      <path
+        key={`country_border_${countryId}`}
+        d={combinedPath}
+        fill="none"
+        stroke="hsl(var(--foreground))"
+        strokeWidth={1.2}
+        opacity={0.4}
+        strokeLinejoin="round"
+      />
+    );
+  });
+
+  return <g>{countryGroups}</g>;
+});
+CountryBordersLayer.displayName = 'CountryBordersLayer';
 
 export default ProvincePath;

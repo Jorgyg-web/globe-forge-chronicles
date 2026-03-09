@@ -3,13 +3,18 @@ import { useGame } from '@/context/GameContext';
 
 import { useMapContext } from './MapContext';
 import { getProvinceCentroid, computeBounds } from '@/data/provinceGeometry';
-import { StaticGeometryLayer, CachedProvinceData } from './ProvincePathCache';
+import { StaticGeometryLayer, CachedProvinceData, CountryBordersLayer } from './ProvincePathCache';
 import { ProvinceInteractionLayer } from './ProvinceInteractionLayer';
 import { ProvinceOverlayLayer } from './ProvinceOverlayLayer';
+
+// Zoom threshold for showing province borders
+const ZOOM_PROVINCE_BORDERS = 1.5;
 
 const ProvinceLayer: React.FC = () => {
   const { state, selectedCountryId, selectedProvinceId, setSelectedCountryId, setSelectedProvinceId, selectedArmyId, setActivePanel, dispatch } = useGame();
   const { zoom, moveMode, moveTargets, setHoveredCountry, setHoveredProvince } = useMapContext();
+
+  const showProvinceBorders = zoom >= ZOOM_PROVINCE_BORDERS;
 
   // Cache province render data — only recomputes when provinces or countries change
   const cachedProvinces: CachedProvinceData[] = useMemo(() => {
@@ -98,9 +103,12 @@ const ProvinceLayer: React.FC = () => {
   return (
     <>
       {/* Layer 1: Static province fills — rarely re-renders */}
-      <StaticGeometryLayer provinces={cachedProvinces} />
+      <StaticGeometryLayer provinces={cachedProvinces} showProvinceBorders={showProvinceBorders} />
 
-      {/* Layer 2: Invisible interaction hit targets — event delegation */}
+      {/* Layer 2: Country borders — always visible, thicker than province borders */}
+      <CountryBordersLayer provinces={cachedProvinces} />
+
+      {/* Layer 3: Invisible interaction hit targets — event delegation */}
       <ProvinceInteractionLayer
         provinces={cachedProvinces}
         onProvinceClick={handleProvinceClick}
@@ -108,7 +116,7 @@ const ProvinceLayer: React.FC = () => {
         onProvinceLeave={handleProvinceLeave}
       />
 
-      {/* Layer 3: Dynamic overlays (selection, labels, details) */}
+      {/* Layer 4: Dynamic overlays (selection, labels, details) */}
       <ProvinceOverlayLayer
         provinces={cachedProvinces}
         selectedProvinceId={selectedProvinceId}
