@@ -150,7 +150,7 @@ const PROVINCE_DEFS: ProvinceDef[] = [
 
   // ─── Japan ───
   { id: 'jpn_k', countryId: 'jpn', name: 'Kantō', pop: 44_000_000, terrain: 'urban', isCoastal: true, dev: 95,
-    resources: { electronics: 70, money: 600 }, buildings: { aircraftFactory: 1, navalBase: 1 },
+    resources: { electronics: 70, money: 600 }, buildings: { airbase: 1, navalBase: 1 },
     adjacent: ['jpn_kn', 'jpn_c'] },
   { id: 'jpn_kn', countryId: 'jpn', name: 'Kansai', pop: 22_000_000, terrain: 'urban', isCoastal: true, dev: 88,
     resources: { electronics: 40, money: 350 },
