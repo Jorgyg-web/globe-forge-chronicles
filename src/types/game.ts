@@ -43,30 +43,117 @@ export const RESOURCE_KEYS: (keyof Resources)[] = ['food', 'oil', 'metal', 'elec
 
 // ─── Buildings ───
 export type BuildingType =
-  | 'industry' | 'infrastructure' | 'resourceExtractor'
-  | 'barracks' | 'tankFactory' | 'aircraftFactory' | 'navalBase'
-  | 'bunker' | 'antiAirDefense' | 'fortification';
+  | 'industrialComplex' | 'infrastructure' | 'resourceExtractor'
+  | 'militaryBase' | 'airbase' | 'navalBase'
+  | 'fortification' | 'radar' | 'antiAirDefense';
 
 export interface Building {
   type: BuildingType;
   level: number;
 }
 
-export const BUILDING_INFO: Record<BuildingType, {
-  name: string; category: 'economic' | 'military_production' | 'defensive';
-  baseCost: Resources; buildTime: number; maxLevel: number;
+export interface BuildingInfo {
+  name: string;
+  category: 'economic' | 'military_production' | 'defensive';
+  baseCost: Resources;
+  buildTime: number;
+  maxLevel: number;
   description: string;
-}> = {
-  industry: { name: 'Industry', category: 'economic', baseCost: { food: 0, oil: 0, metal: 500, electronics: 200, money: 2000 }, buildTime: 4, maxLevel: 5, description: 'Increases province production output' },
-  infrastructure: { name: 'Infrastructure', category: 'economic', baseCost: { food: 0, oil: 100, metal: 300, electronics: 100, money: 1500 }, buildTime: 3, maxLevel: 5, description: 'Improves logistics and unit movement speed' },
-  resourceExtractor: { name: 'Resource Extractor', category: 'economic', baseCost: { food: 0, oil: 0, metal: 400, electronics: 100, money: 1000 }, buildTime: 3, maxLevel: 5, description: 'Increases resource production' },
-  barracks: { name: 'Barracks', category: 'military_production', baseCost: { food: 0, oil: 0, metal: 300, electronics: 50, money: 1000 }, buildTime: 3, maxLevel: 5, description: 'Produces infantry and support units' },
-  tankFactory: { name: 'Tank Factory', category: 'military_production', baseCost: { food: 0, oil: 200, metal: 800, electronics: 300, money: 3000 }, buildTime: 5, maxLevel: 5, description: 'Produces armored vehicles and tanks' },
-  aircraftFactory: { name: 'Aircraft Factory', category: 'military_production', baseCost: { food: 0, oil: 300, metal: 600, electronics: 500, money: 4000 }, buildTime: 6, maxLevel: 5, description: 'Produces aircraft and drones' },
-  navalBase: { name: 'Naval Base', category: 'military_production', baseCost: { food: 0, oil: 400, metal: 700, electronics: 300, money: 5000 }, buildTime: 7, maxLevel: 5, description: 'Produces naval vessels' },
-  bunker: { name: 'Bunker', category: 'defensive', baseCost: { food: 0, oil: 0, metal: 500, electronics: 50, money: 800 }, buildTime: 3, maxLevel: 5, description: 'Reduces damage to defending units' },
-  antiAirDefense: { name: 'Anti-Air Defense', category: 'defensive', baseCost: { food: 0, oil: 100, metal: 400, electronics: 300, money: 1500 }, buildTime: 4, maxLevel: 5, description: 'Shoots down enemy aircraft' },
-  fortification: { name: 'Fortification', category: 'defensive', baseCost: { food: 0, oil: 0, metal: 600, electronics: 100, money: 1200 }, buildTime: 4, maxLevel: 5, description: 'Defensive bonus for garrison' },
+  bonuses: {
+    production?: number;      // % increase per level
+    movementSpeed?: number;   // % increase per level
+    resourceYield?: number;   // % increase per level
+    defenseBonus?: number;    // % increase per level
+    unitTraining?: boolean;   // enables unit training
+    aircraftProduction?: boolean;
+    navalProduction?: boolean;
+    radarRange?: number;      // detection range bonus per level
+    antiAirEfficiency?: number; // % per level
+  };
+}
+
+export const BUILDING_INFO: Record<BuildingType, BuildingInfo> = {
+  industrialComplex: {
+    name: 'Industrial Complex',
+    category: 'economic',
+    baseCost: { food: 0, oil: 100, metal: 600, electronics: 250, money: 2500 },
+    buildTime: 4,
+    maxLevel: 5,
+    description: 'Increases province production output and manufacturing capacity',
+    bonuses: { production: 15 },
+  },
+  infrastructure: {
+    name: 'Infrastructure',
+    category: 'economic',
+    baseCost: { food: 0, oil: 150, metal: 400, electronics: 100, money: 1800 },
+    buildTime: 3,
+    maxLevel: 5,
+    description: 'Improves logistics, unit movement speed, and supply efficiency',
+    bonuses: { movementSpeed: 20 },
+  },
+  resourceExtractor: {
+    name: 'Resource Extractor',
+    category: 'economic',
+    baseCost: { food: 0, oil: 50, metal: 450, electronics: 80, money: 1200 },
+    buildTime: 3,
+    maxLevel: 5,
+    description: 'Increases extraction of local resources',
+    bonuses: { resourceYield: 18 },
+  },
+  militaryBase: {
+    name: 'Military Base',
+    category: 'military_production',
+    baseCost: { food: 0, oil: 200, metal: 700, electronics: 200, money: 3500 },
+    buildTime: 5,
+    maxLevel: 5,
+    description: 'Trains infantry, tanks, artillery and support units',
+    bonuses: { unitTraining: true },
+  },
+  airbase: {
+    name: 'Airbase',
+    category: 'military_production',
+    baseCost: { food: 0, oil: 350, metal: 550, electronics: 450, money: 4500 },
+    buildTime: 6,
+    maxLevel: 5,
+    description: 'Produces fighters, bombers, and drones',
+    bonuses: { aircraftProduction: true },
+  },
+  navalBase: {
+    name: 'Naval Base',
+    category: 'military_production',
+    baseCost: { food: 0, oil: 450, metal: 800, electronics: 350, money: 5500 },
+    buildTime: 7,
+    maxLevel: 5,
+    description: 'Produces naval vessels and enables sea operations',
+    bonuses: { navalProduction: true },
+  },
+  fortification: {
+    name: 'Fortifications',
+    category: 'defensive',
+    baseCost: { food: 0, oil: 50, metal: 700, electronics: 100, money: 1500 },
+    buildTime: 4,
+    maxLevel: 5,
+    description: 'Provides defensive bonus during combat and protects garrison',
+    bonuses: { defenseBonus: 12 },
+  },
+  radar: {
+    name: 'Radar Station',
+    category: 'defensive',
+    baseCost: { food: 0, oil: 100, metal: 300, electronics: 500, money: 2000 },
+    buildTime: 3,
+    maxLevel: 5,
+    description: 'Detects enemy movement and improves anti-air targeting',
+    bonuses: { radarRange: 1, antiAirEfficiency: 10 },
+  },
+  antiAirDefense: {
+    name: 'Anti-Air Defense',
+    category: 'defensive',
+    baseCost: { food: 0, oil: 120, metal: 450, electronics: 350, money: 1800 },
+    buildTime: 4,
+    maxLevel: 5,
+    description: 'Shoots down enemy aircraft attacking the province',
+    bonuses: { antiAirEfficiency: 18 },
+  },
 };
 
 // ─── Province ───
