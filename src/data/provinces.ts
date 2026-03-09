@@ -282,7 +282,7 @@ const PROVINCE_DEFS: ProvinceDef[] = [
 
   // ─── Iran ───
   { id: 'irn_c', countryId: 'irn', name: 'Central Iran', pop: 30_000_000, terrain: 'desert', isCoastal: false, dev: 45,
-    resources: { oil: 30, money: 120 }, buildings: { barracks: 1 },
+    resources: { oil: 30, money: 120 }, buildings: { militaryBase: 1 },
     adjacent: ['irn_w', 'irn_e', 'irn_s'] },
   { id: 'irn_w', countryId: 'irn', name: 'Western Iran', pop: 25_000_000, terrain: 'mountain', isCoastal: false, dev: 35,
     resources: { oil: 60, metal: 15, money: 80 },
