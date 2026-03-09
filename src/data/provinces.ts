@@ -307,7 +307,7 @@ const PROVINCE_DEFS: ProvinceDef[] = [
 
   // ─── Israel ───
   { id: 'isr_c', countryId: 'isr', name: 'Central District', pop: 5_000_000, terrain: 'urban', isCoastal: true, dev: 85,
-    resources: { electronics: 40, money: 300 }, buildings: { aircraftFactory: 1, barracks: 2 },
+    resources: { electronics: 40, money: 300 }, buildings: { airbase: 1, militaryBase: 2 },
     adjacent: ['isr_s', 'isr_n'] },
   { id: 'isr_s', countryId: 'isr', name: 'Southern District', pop: 2_000_000, terrain: 'desert', isCoastal: false, dev: 65,
     resources: { metal: 20, money: 80 }, buildings: { fortification: 1 },
