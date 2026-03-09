@@ -767,7 +767,7 @@ function resolveBattle(
   const terrain = prov.terrain;
   const terrainBonus = TERRAIN_DEFENSE_BONUS[terrain];
   const fortLevel = prov.buildings.find(b => b.type === 'fortification')?.level ?? 0;
-  const bunkerLevel = prov.buildings.find(b => b.type === 'bunker')?.level ?? 0;
+  const radarLevel = prov.buildings.find(b => b.type === 'radar')?.level ?? 0;
   const aaLevel = prov.buildings.find(b => b.type === 'antiAirDefense')?.level ?? 0;
 
   const allAttackUnits: ArmyUnit[] = attackerArmies.flatMap(a => a.units);
