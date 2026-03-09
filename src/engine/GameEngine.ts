@@ -829,7 +829,7 @@ function resolveBattle(
       }
     }
 
-    effectiveness *= (1 + terrainBonus + fortLevel * 0.12 + bunkerLevel * 0.08);
+    effectiveness *= (1 + terrainBonus + fortLevel * 0.12 + radarLevel * 0.05);
     defendPower += effectiveness;
   }
   defendPower *= (0.8 + defenderMorale / 500);
