@@ -296,7 +296,7 @@ const PROVINCE_DEFS: ProvinceDef[] = [
 
   // ─── Egypt ───
   { id: 'egy_n', countryId: 'egy', name: 'Nile Delta', pop: 50_000_000, terrain: 'plains', isCoastal: true, dev: 50,
-    resources: { food: 70, money: 150 }, buildings: { barracks: 1 },
+    resources: { food: 70, money: 150 }, buildings: { militaryBase: 1 },
     adjacent: ['egy_c', 'isr_s'] },
   { id: 'egy_c', countryId: 'egy', name: 'Cairo Region', pop: 25_000_000, terrain: 'urban', isCoastal: false, dev: 55,
     resources: { food: 20, money: 180 },
