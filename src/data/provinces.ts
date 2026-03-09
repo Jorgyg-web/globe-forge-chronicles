@@ -201,7 +201,7 @@ const PROVINCE_DEFS: ProvinceDef[] = [
 
   // ─── South Korea ───
   { id: 'kor_c', countryId: 'kor', name: 'Capital Region', pop: 26_000_000, terrain: 'urban', isCoastal: true, dev: 92,
-    resources: { electronics: 60, money: 400 }, buildings: { barracks: 2, aircraftFactory: 1 },
+    resources: { electronics: 60, money: 400 }, buildings: { militaryBase: 2, airbase: 1 },
     adjacent: ['kor_s', 'kor_w', 'chn_e'] },
   { id: 'kor_s', countryId: 'kor', name: 'Gyeongsang', pop: 13_000_000, terrain: 'coastal', isCoastal: true, dev: 80,
     resources: { metal: 25, electronics: 20, money: 200 }, buildings: { navalBase: 1 },
