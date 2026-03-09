@@ -25,11 +25,15 @@ const TERRAIN_ICONS: Record<string, string> = {
 };
 
 const BUILDING_ICONS: Record<BuildingType, React.ReactNode> = {
-  industry: <Factory size={13} />, infrastructure: <Building2 size={13} />,
-  resourceExtractor: <Pickaxe size={13} />, barracks: <Swords size={13} />,
-  tankFactory: <Shield size={13} />, aircraftFactory: <Plane size={13} />,
-  navalBase: <Anchor size={13} />, bunker: <Castle size={13} />,
-  antiAirDefense: <Crosshair size={13} />, fortification: <Building2 size={13} />,
+  industrialComplex: <Factory size={13} />,
+  infrastructure: <Building2 size={13} />,
+  resourceExtractor: <Pickaxe size={13} />,
+  militaryBase: <Swords size={13} />,
+  airbase: <Plane size={13} />,
+  navalBase: <Anchor size={13} />,
+  fortification: <Castle size={13} />,
+  radar: <Zap size={13} />,
+  antiAirDefense: <Crosshair size={13} />,
 };
 
 const CATEGORY_META: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
@@ -39,16 +43,15 @@ const CATEGORY_META: Record<string, { label: string; icon: React.ReactNode; colo
 };
 
 const BUILDING_EFFECTS: Record<BuildingType, (level: number) => string> = {
-  industry: (l) => `+${l * 10}% production output`,
-  infrastructure: (l) => `+${l * 15}% movement speed`,
-  resourceExtractor: (l) => `+${l * 15}% resource yield`,
-  barracks: (l) => l >= 2 ? 'Infantry, Motorized, Artillery, AT, AA' : 'Infantry',
-  tankFactory: (l) => l >= 2 ? 'Tanks, Armored Cars, Missiles' : 'Armored Cars',
-  aircraftFactory: (l) => l >= 2 ? 'Fighters, Bombers, Drones' : 'Fighters, Drones',
+  industrialComplex: (l) => `+${l * 15}% production output`,
+  infrastructure: (l) => `+${l * 20}% movement speed`,
+  resourceExtractor: (l) => `+${l * 18}% resource yield`,
+  militaryBase: (l) => l >= 3 ? 'All ground units unlocked' : l >= 2 ? 'Infantry, Vehicles, Artillery' : 'Infantry only',
+  airbase: (l) => l >= 2 ? 'Fighters, Bombers, Drones' : 'Fighters, Drones',
   navalBase: (l) => `Naval units (Lv.${l})`,
-  bunker: (l) => `−${l * 10}% damage to defenders`,
-  antiAirDefense: (l) => `Shoots down ${l * 15}% aircraft`,
-  fortification: (l) => `+${l * 10}% garrison defense`,
+  fortification: (l) => `+${l * 12}% defense bonus`,
+  radar: (l) => `+${l} detection range, +${l * 10}% AA targeting`,
+  antiAirDefense: (l) => `Shoots down ${l * 18}% aircraft`,
 };
 
 function scaleResources(r: Resources, s: number): Resources {

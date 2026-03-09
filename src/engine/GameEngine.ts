@@ -396,8 +396,8 @@ function processResourceIncome(state: GameState): GameState {
     for (const prov of provs) {
       const moraleMultiplier = prov.morale / 100;
       const corruptionPenalty = 1 - prov.corruption / 200;
-      const extractorBonus = 1 + (prov.buildings.find(b => b.type === 'resourceExtractor')?.level ?? 0) * 0.15;
-      const industryBonus = 1 + (prov.buildings.find(b => b.type === 'industry')?.level ?? 0) * 0.1;
+      const extractorBonus = 1 + (prov.buildings.find(b => b.type === 'resourceExtractor')?.level ?? 0) * 0.18;
+      const industryBonus = 1 + (prov.buildings.find(b => b.type === 'industrialComplex')?.level ?? 0) * 0.15;
 
       for (const key of RESOURCE_KEYS) {
         income[key] += Math.floor(prov.resourceProduction[key] * moraleMultiplier * corruptionPenalty * extractorBonus * industryBonus);
@@ -511,7 +511,7 @@ function processAllResearch(state: GameState, events: GameEvent[]): GameState {
     const provs = getProvincesForCountry(s.provinces, countryId);
     let rpPerTurn = 5;
     for (const p of provs) {
-      rpPerTurn += (p.buildings.find(b => b.type === 'industry')?.level ?? 0) * 2;
+      rpPerTurn += (p.buildings.find(b => b.type === 'industrialComplex')?.level ?? 0) * 2;
     }
     const country = s.countries[countryId];
     if (country.technology.activeResearch.length === 0) continue;
@@ -767,7 +767,7 @@ function resolveBattle(
   const terrain = prov.terrain;
   const terrainBonus = TERRAIN_DEFENSE_BONUS[terrain];
   const fortLevel = prov.buildings.find(b => b.type === 'fortification')?.level ?? 0;
-  const bunkerLevel = prov.buildings.find(b => b.type === 'bunker')?.level ?? 0;
+  const radarLevel = prov.buildings.find(b => b.type === 'radar')?.level ?? 0;
   const aaLevel = prov.buildings.find(b => b.type === 'antiAirDefense')?.level ?? 0;
 
   const allAttackUnits: ArmyUnit[] = attackerArmies.flatMap(a => a.units);
@@ -829,7 +829,7 @@ function resolveBattle(
       }
     }
 
-    effectiveness *= (1 + terrainBonus + fortLevel * 0.12 + bunkerLevel * 0.08);
+    effectiveness *= (1 + terrainBonus + fortLevel * 0.12 + radarLevel * 0.05);
     defendPower += effectiveness;
   }
   defendPower *= (0.8 + defenderMorale / 500);
@@ -939,11 +939,11 @@ function processAI(state: GameState, countryId: CountryId, events: GameEvent[]):
     }
   }
 
-  // Build barracks in provinces that don't have them
+  // Build military base in provinces that don't have them
   if (s.turn % 3 === 0) {
     for (const prov of provs) {
-      if (!prov.buildings.some(b => b.type === 'barracks') && canAfford(s.countries[countryId].resources, scaleResources(BUILDING_INFO.barracks.baseCost, 1))) {
-        s = processAction(s, { type: 'BUILD_IN_PROVINCE', provinceId: prov.id, buildingType: 'barracks' });
+      if (!prov.buildings.some(b => b.type === 'militaryBase') && canAfford(s.countries[countryId].resources, scaleResources(BUILDING_INFO.militaryBase.baseCost, 1))) {
+        s = processAction(s, { type: 'BUILD_IN_PROVINCE', provinceId: prov.id, buildingType: 'militaryBase' });
         break;
       }
     }
@@ -952,7 +952,7 @@ function processAI(state: GameState, countryId: CountryId, events: GameEvent[]):
   // Produce units
   if (s.turn % 4 === 0) {
     for (const prov of provs) {
-      if (prov.buildings.some(b => b.type === 'barracks') && canAfford(s.countries[countryId].resources, scaleResources(UNIT_STATS.infantry.cost, 5))) {
+      if (prov.buildings.some(b => b.type === 'militaryBase') && canAfford(s.countries[countryId].resources, scaleResources(UNIT_STATS.infantry.cost, 5))) {
         s = processAction(s, { type: 'PRODUCE_UNITS', provinceId: prov.id, unitType: 'infantry', quantity: 5 });
         break;
       }
