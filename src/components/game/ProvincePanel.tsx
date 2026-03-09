@@ -16,8 +16,8 @@ import {
 import { Progress } from '@/components/ui/progress';
 
 const RESOURCE_ICONS: Record<keyof Resources, React.ReactNode> = {
-  food: <Wheat size={10} />, oil: <Fuel size={10} />, metal: <Pickaxe size={10} />,
-  electronics: <Cpu size={10} />, money: <DollarSign size={10} />,
+  food: <Wheat size={10} />, steel: <Pickaxe size={10} />, oil: <Fuel size={10} />,
+  rareMetals: <Zap size={10} />, manpower: <Users size={10} />,
 };
 
 const TERRAIN_ICONS: Record<string, string> = {
@@ -55,7 +55,7 @@ const BUILDING_EFFECTS: Record<BuildingType, (level: number) => string> = {
 };
 
 function scaleResources(r: Resources, s: number): Resources {
-  return { food: Math.floor(r.food * s), oil: Math.floor(r.oil * s), metal: Math.floor(r.metal * s), electronics: Math.floor(r.electronics * s), money: Math.floor(r.money * s) };
+  return { food: Math.floor(r.food * s), steel: Math.floor(r.steel * s), oil: Math.floor(r.oil * s), rareMetals: Math.floor(r.rareMetals * s), manpower: Math.floor(r.manpower * s) };
 }
 
 function canAfford(have: Resources, cost: Resources): boolean {
@@ -216,15 +216,18 @@ const OverviewTab = ({ province, state, isPlayer }: { province: Province; state:
           {province.buildings.map(b => {
             const info = BUILDING_INFO[b.type];
             const catMeta = CATEGORY_META[info.category];
+
             return (
-              <div key={b.type} className="flex items-center gap-2 py-1 px-2 rounded bg-muted/20">
-                <span className={catMeta.color}>{BUILDING_ICONS[b.type]}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[10px] font-semibold text-foreground">{info.name}</span>
-                    <span className="text-[9px] font-mono text-muted-foreground">Lv.{b.level}/{info.maxLevel}</span>
+              <div key={b.type} className="rounded bg-muted/20 overflow-hidden">
+                <div className="flex items-center gap-2 py-1 px-2">
+                  <span className={catMeta.color}>{BUILDING_ICONS[b.type]}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-semibold text-foreground">{info.name}</span>
+                      <span className="text-[9px] font-mono text-muted-foreground">Lv.{b.level}/{info.maxLevel}</span>
+                    </div>
+                    <span className="text-[9px] text-muted-foreground">{BUILDING_EFFECTS[b.type](b.level)}</span>
                   </div>
-                  <span className="text-[9px] text-muted-foreground">{BUILDING_EFFECTS[b.type](b.level)}</span>
                 </div>
               </div>
             );

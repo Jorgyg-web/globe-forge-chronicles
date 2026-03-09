@@ -9,6 +9,8 @@ export interface GameState {
   turn: number;
   year: number;
   month: number;
+  rngSeed: number;
+  nextEntityId: number;
   countries: Record<CountryId, Country>;
   provinces: Record<ProvinceId, Province>;
   armies: Record<ArmyId, Army>;
@@ -28,18 +30,36 @@ export interface ActiveBattle {
   provinceId: ProvinceId;
   attackerCountryId: CountryId;
   defenderCountryId: CountryId;
+  startedTurn: number;
+  turnsElapsed: number;
+  attackerMorale: number;
+  defenderMorale: number;
+  totalAttackerStrength: number;
+  totalDefenderStrength: number;
 }
 
 // ─── Resources ───
 export interface Resources {
-  food: number;
-  oil: number;
-  metal: number;
-  electronics: number;
-  money: number;
+  food: number;        // Agriculture, sustenance
+  steel: number;       // Manufacturing, construction
+  oil: number;         // Energy, fuel, transportation
+  rareMetals: number;  // Advanced tech, weapons
+  manpower: number;    // Population, labor, military capacity
 }
 
-export const RESOURCE_KEYS: (keyof Resources)[] = ['food', 'oil', 'metal', 'electronics', 'money'];
+export const RESOURCE_KEYS: (keyof Resources)[] = ['food', 'steel', 'oil', 'rareMetals', 'manpower'];
+
+/** Terrain-based resource production per province per turn */
+export const TERRAIN_RESOURCES: Record<TerrainType, Partial<Resources>> = {
+  plains: { food: 4, manpower: 2 },          // Agricultural heartland
+  forest: { steel: 2, food: 1, manpower: 1 }, // Lumber, hunting
+  mountain: { steel: 4, rareMetals: 2 },     // Mining
+  desert: { oil: 4, rareMetals: 1 },         // Oil fields, minerals
+  jungle: { food: 3, rareMetals: 1 },        // Jungle products, gems
+  urban: { manpower: 5, food: 1 },           // Population, limited agriculture
+  coastal: { food: 2, oil: 1, manpower: 2 }, // Fishing, oil, ports
+  arctic: { oil: 2, rareMetals: 1 },         // Arctic oil, rare deposits
+};
 
 // ─── Buildings ───
 export type BuildingType =
@@ -76,7 +96,7 @@ export const BUILDING_INFO: Record<BuildingType, BuildingInfo> = {
   industrialComplex: {
     name: 'Industrial Complex',
     category: 'economic',
-    baseCost: { food: 0, oil: 100, metal: 600, electronics: 250, money: 2500 },
+    baseCost: { food: 0, steel: 600, oil: 100, rareMetals: 30, manpower: 30 },
     buildTime: 4,
     maxLevel: 5,
     description: 'Increases province production output and manufacturing capacity',
@@ -85,7 +105,7 @@ export const BUILDING_INFO: Record<BuildingType, BuildingInfo> = {
   infrastructure: {
     name: 'Infrastructure',
     category: 'economic',
-    baseCost: { food: 0, oil: 150, metal: 400, electronics: 100, money: 1800 },
+    baseCost: { food: 0, steel: 400, oil: 150, rareMetals: 20, manpower: 20 },
     buildTime: 3,
     maxLevel: 5,
     description: 'Improves logistics, unit movement speed, and supply efficiency',
@@ -94,7 +114,7 @@ export const BUILDING_INFO: Record<BuildingType, BuildingInfo> = {
   resourceExtractor: {
     name: 'Resource Extractor',
     category: 'economic',
-    baseCost: { food: 0, oil: 50, metal: 450, electronics: 80, money: 1200 },
+    baseCost: { food: 0, steel: 450, oil: 50, rareMetals: 15, manpower: 15 },
     buildTime: 3,
     maxLevel: 5,
     description: 'Increases extraction of local resources',
@@ -103,7 +123,7 @@ export const BUILDING_INFO: Record<BuildingType, BuildingInfo> = {
   militaryBase: {
     name: 'Military Base',
     category: 'military_production',
-    baseCost: { food: 0, oil: 200, metal: 700, electronics: 200, money: 3500 },
+    baseCost: { food: 0, steel: 700, oil: 200, rareMetals: 40, manpower: 50 },
     buildTime: 5,
     maxLevel: 5,
     description: 'Trains infantry, tanks, artillery and support units',
@@ -112,7 +132,7 @@ export const BUILDING_INFO: Record<BuildingType, BuildingInfo> = {
   airbase: {
     name: 'Airbase',
     category: 'military_production',
-    baseCost: { food: 0, oil: 350, metal: 550, electronics: 450, money: 4500 },
+    baseCost: { food: 0, steel: 550, oil: 350, rareMetals: 80, manpower: 50 },
     buildTime: 6,
     maxLevel: 5,
     description: 'Produces fighters, bombers, and drones',
@@ -121,7 +141,7 @@ export const BUILDING_INFO: Record<BuildingType, BuildingInfo> = {
   navalBase: {
     name: 'Naval Base',
     category: 'military_production',
-    baseCost: { food: 0, oil: 450, metal: 800, electronics: 350, money: 5500 },
+    baseCost: { food: 0, steel: 800, oil: 450, rareMetals: 70, manpower: 60 },
     buildTime: 7,
     maxLevel: 5,
     description: 'Produces naval vessels and enables sea operations',
@@ -130,7 +150,7 @@ export const BUILDING_INFO: Record<BuildingType, BuildingInfo> = {
   fortification: {
     name: 'Fortifications',
     category: 'defensive',
-    baseCost: { food: 0, oil: 50, metal: 700, electronics: 100, money: 1500 },
+    baseCost: { food: 0, steel: 700, oil: 50, rareMetals: 20, manpower: 15 },
     buildTime: 4,
     maxLevel: 5,
     description: 'Provides defensive bonus during combat and protects garrison',
@@ -139,7 +159,7 @@ export const BUILDING_INFO: Record<BuildingType, BuildingInfo> = {
   radar: {
     name: 'Radar Station',
     category: 'defensive',
-    baseCost: { food: 0, oil: 100, metal: 300, electronics: 500, money: 2000 },
+    baseCost: { food: 0, steel: 300, oil: 100, rareMetals: 100, manpower: 20 },
     buildTime: 3,
     maxLevel: 5,
     description: 'Detects enemy movement and improves anti-air targeting',
@@ -148,7 +168,7 @@ export const BUILDING_INFO: Record<BuildingType, BuildingInfo> = {
   antiAirDefense: {
     name: 'Anti-Air Defense',
     category: 'defensive',
-    baseCost: { food: 0, oil: 120, metal: 450, electronics: 350, money: 1800 },
+    baseCost: { food: 0, steel: 450, oil: 120, rareMetals: 60, manpower: 15 },
     buildTime: 4,
     maxLevel: 5,
     description: 'Shoots down enemy aircraft attacking the province',
@@ -171,6 +191,7 @@ export interface Province {
   terrain: TerrainType;
   isCoastal: boolean;
   development: number;
+  neighbors?: ProvinceId[];
   adjacentProvinces: ProvinceId[];
   geometry: string; // SVG path string for map rendering
 }
@@ -260,9 +281,11 @@ export interface Army {
   countryId: CountryId;
   provinceId: ProvinceId;
   targetProvinceId: ProvinceId | null;
+  path: ProvinceId[];
   movementProgress: number;
   units: ArmyUnit[];
   name: string;
+  morale: number; // 0-100, affects combat performance and retreat threshold
 }
 
 export type GameSpeed = 'slow' | 'normal' | 'fast';
@@ -329,7 +352,7 @@ export interface PolicyEffect {
 }
 
 // ─── Technology ───
-export type TechCategory = 'infantry' | 'armor' | 'aircraft' | 'naval' | 'support' | 'economic';
+export type TechCategory = 'infantry' | 'armor' | 'air' | 'naval' | 'industry' | 'logistics';
 
 export interface TechnologyState {
   researched: string[];
@@ -339,24 +362,23 @@ export interface TechnologyState {
 export interface ActiveResearch {
   techId: string;
   progress: number;
+  turnsSpent: number;
 }
 
 export interface Technology {
   id: string;
   name: string;
   category: TechCategory;
-  tier: number;
   cost: number;
+  researchTime: number;
   prerequisites: string[];
   effects: TechEffect[];
-  description: string;
   unlocksUnit?: UnitType;
 }
 
 export interface TechEffect {
-  target: string;
+  target: 'infantry_attack' | 'armor_attack' | 'air_attack' | 'naval_attack' | 'tank_speed' | 'industry_output' | 'logistics_speed' | 'unit_production_speed';
   modifier: number;
-  description: string;
 }
 
 // ─── War & Combat ───
@@ -394,6 +416,7 @@ export interface GameEvent {
 // ─── Actions ───
 export type GameAction =
   | { type: 'NEXT_TURN' }
+  | { type: 'UPDATE_ARMY_MOVEMENT'; deltaTurns: number }
   | { type: 'SET_SPEED'; speed: GameSpeed }
   | { type: 'TOGGLE_PAUSE' }
   | { type: 'BUILD_IN_PROVINCE'; provinceId: ProvinceId; buildingType: BuildingType }

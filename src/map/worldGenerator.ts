@@ -6,32 +6,33 @@
  * Each non-US country = 1 province (the country itself).
  */
 
-import { Country, Province, Building, TerrainType, Resources } from '@/types/game';
+import { Country, Province, Building, TerrainType, Resources, TERRAIN_RESOURCES } from '@/types/game';
+import { randomFromKey, randomIntFromKey } from '@/lib/deterministicRandom';
 import { projectPoint, getDefaultProjectionConfig } from './projection';
 import { updateProvinceGeometry, invalidateCentroidCache } from '@/data/provinceGeometry';
 
 // ─── Country overrides (preserve gameplay stats for key countries) ─────
 const COUNTRY_OVERRIDES: Record<string, Partial<Country> & { resources: Resources; startTech: string[]; govType: Country['government']['type']; researchSlots: number }> = {
-  usa: { name: 'United States', color: '#4A90D9', population: 331_000_000, resources: { food: 2000, oil: 1000, metal: 800, electronics: 600, money: 20000 }, govType: 'democracy', researchSlots: 3, startTech: ['infantry_1', 'armor_1', 'aircraft_1', 'support_1', 'econ_1'] },
-  chn: { name: 'China', color: '#DE3533', population: 1_400_000_000, resources: { food: 1500, oil: 600, metal: 1000, electronics: 500, money: 15000 }, govType: 'communist', researchSlots: 3, startTech: ['infantry_1', 'armor_1', 'aircraft_1', 'support_1', 'econ_1'] },
-  rus: { name: 'Russia', color: '#5C7A29', population: 144_000_000, resources: { food: 800, oil: 1200, metal: 900, electronics: 200, money: 8000 }, govType: 'authoritarian', researchSlots: 2, startTech: ['infantry_1', 'armor_1', 'armor_2', 'support_1'] },
-  gbr: { name: 'United Kingdom', color: '#2E5090', population: 67_000_000, resources: { food: 500, oil: 300, metal: 300, electronics: 400, money: 12000 }, govType: 'democracy', researchSlots: 2, startTech: ['infantry_1', 'armor_1', 'aircraft_1', 'econ_1'] },
-  fra: { name: 'France', color: '#3B5998', population: 67_000_000, resources: { food: 600, oil: 200, metal: 300, electronics: 350, money: 11000 }, govType: 'democracy', researchSlots: 2, startTech: ['infantry_1', 'armor_1', 'aircraft_1', 'econ_1'] },
-  deu: { name: 'Germany', color: '#555555', population: 83_000_000, resources: { food: 500, oil: 100, metal: 400, electronics: 500, money: 14000 }, govType: 'democracy', researchSlots: 2, startTech: ['infantry_1', 'armor_1', 'armor_2', 'econ_1', 'econ_2'] },
-  jpn: { name: 'Japan', color: '#BC002D', population: 125_000_000, resources: { food: 300, oil: 50, metal: 200, electronics: 800, money: 16000 }, govType: 'democracy', researchSlots: 2, startTech: ['infantry_1', 'aircraft_1', 'econ_1', 'econ_2'] },
-  ind: { name: 'India', color: '#FF9933', population: 1_380_000_000, resources: { food: 1000, oil: 200, metal: 500, electronics: 200, money: 6000 }, govType: 'democracy', researchSlots: 2, startTech: ['infantry_1', 'armor_1', 'support_1'] },
-  bra: { name: 'Brazil', color: '#009B3A', population: 212_000_000, resources: { food: 1200, oil: 300, metal: 400, electronics: 100, money: 5000 }, govType: 'democracy', researchSlots: 1, startTech: ['infantry_1', 'econ_1'] },
-  kor: { name: 'South Korea', color: '#003478', population: 52_000_000, resources: { food: 200, oil: 50, metal: 200, electronics: 600, money: 10000 }, govType: 'democracy', researchSlots: 2, startTech: ['infantry_1', 'armor_1', 'aircraft_1', 'econ_1'] },
-  tur: { name: 'Turkey', color: '#C8102E', population: 84_000_000, resources: { food: 500, oil: 100, metal: 200, electronics: 80, money: 4000 }, govType: 'democracy', researchSlots: 1, startTech: ['infantry_1', 'armor_1'] },
-  sau: { name: 'Saudi Arabia', color: '#006C35', population: 35_000_000, resources: { food: 100, oil: 2000, metal: 100, electronics: 50, money: 15000 }, govType: 'monarchy', researchSlots: 1, startTech: ['infantry_1', 'aircraft_1'] },
-  aus: { name: 'Australia', color: '#00843D', population: 25_000_000, resources: { food: 400, oil: 200, metal: 500, electronics: 200, money: 8000 }, govType: 'democracy', researchSlots: 1, startTech: ['infantry_1', 'armor_1', 'econ_1'] },
-  can: { name: 'Canada', color: '#FF0000', population: 38_000_000, resources: { food: 600, oil: 600, metal: 300, electronics: 200, money: 9000 }, govType: 'democracy', researchSlots: 1, startTech: ['infantry_1', 'armor_1', 'econ_1'] },
-  ita: { name: 'Italy', color: '#008C45', population: 60_000_000, resources: { food: 400, oil: 80, metal: 200, electronics: 250, money: 8000 }, govType: 'democracy', researchSlots: 1, startTech: ['infantry_1', 'armor_1', 'econ_1'] },
-  irn: { name: 'Iran', color: '#239F40', population: 85_000_000, resources: { food: 300, oil: 800, metal: 200, electronics: 50, money: 3000 }, govType: 'authoritarian', researchSlots: 1, startTech: ['infantry_1', 'support_1'] },
-  egy: { name: 'Egypt', color: '#C09300', population: 104_000_000, resources: { food: 600, oil: 100, metal: 100, electronics: 30, money: 2000 }, govType: 'authoritarian', researchSlots: 1, startTech: ['infantry_1'] },
-  isr: { name: 'Israel', color: '#0038B8', population: 9_000_000, resources: { food: 100, oil: 20, metal: 100, electronics: 300, money: 8000 }, govType: 'democracy', researchSlots: 2, startTech: ['infantry_1', 'infantry_2', 'armor_1', 'armor_2', 'aircraft_1', 'support_1', 'support_2'] },
-  pol: { name: 'Poland', color: '#DC143C', population: 38_000_000, resources: { food: 400, oil: 50, metal: 200, electronics: 100, money: 4000 }, govType: 'democracy', researchSlots: 1, startTech: ['infantry_1', 'armor_1'] },
-  mex: { name: 'Mexico', color: '#006847', population: 130_000_000, resources: { food: 500, oil: 200, metal: 150, electronics: 60, money: 3000 }, govType: 'democracy', researchSlots: 1, startTech: ['infantry_1'] },
+  usa: { name: 'United States', color: '#4A90D9', population: 331_000_000, resources: { food: 2000, steel: 800, oil: 1000, rareMetals: 600, manpower: 20000 }, govType: 'democracy', researchSlots: 3, startTech: ['infantry_1', 'armor_1', 'aircraft_1', 'support_1', 'econ_1'] },
+  chn: { name: 'China', color: '#DE3533', population: 1_400_000_000, resources: { food: 1500, steel: 1000, oil: 600, rareMetals: 500, manpower: 15000 }, govType: 'communist', researchSlots: 3, startTech: ['infantry_1', 'armor_1', 'aircraft_1', 'support_1', 'econ_1'] },
+  rus: { name: 'Russia', color: '#5C7A29', population: 144_000_000, resources: { food: 800, steel: 900, oil: 1200, rareMetals: 200, manpower: 8000 }, govType: 'authoritarian', researchSlots: 2, startTech: ['infantry_1', 'armor_1', 'armor_2', 'support_1'] },
+  gbr: { name: 'United Kingdom', color: '#2E5090', population: 67_000_000, resources: { food: 500, steel: 300, oil: 300, rareMetals: 400, manpower: 12000 }, govType: 'democracy', researchSlots: 2, startTech: ['infantry_1', 'armor_1', 'aircraft_1', 'econ_1'] },
+  fra: { name: 'France', color: '#3B5998', population: 67_000_000, resources: { food: 600, steel: 300, oil: 200, rareMetals: 350, manpower: 11000 }, govType: 'democracy', researchSlots: 2, startTech: ['infantry_1', 'armor_1', 'aircraft_1', 'econ_1'] },
+  deu: { name: 'Germany', color: '#555555', population: 83_000_000, resources: { food: 500, steel: 400, oil: 100, rareMetals: 500, manpower: 14000 }, govType: 'democracy', researchSlots: 2, startTech: ['infantry_1', 'armor_1', 'armor_2', 'econ_1', 'econ_2'] },
+  jpn: { name: 'Japan', color: '#BC002D', population: 125_000_000, resources: { food: 300, steel: 200, oil: 50, rareMetals: 800, manpower: 16000 }, govType: 'democracy', researchSlots: 2, startTech: ['infantry_1', 'aircraft_1', 'econ_1', 'econ_2'] },
+  ind: { name: 'India', color: '#FF9933', population: 1_380_000_000, resources: { food: 1000, steel: 500, oil: 200, rareMetals: 200, manpower: 6000 }, govType: 'democracy', researchSlots: 2, startTech: ['infantry_1', 'armor_1', 'support_1'] },
+  bra: { name: 'Brazil', color: '#009B3A', population: 212_000_000, resources: { food: 1200, steel: 400, oil: 300, rareMetals: 100, manpower: 5000 }, govType: 'democracy', researchSlots: 1, startTech: ['infantry_1', 'econ_1'] },
+  kor: { name: 'South Korea', color: '#003478', population: 52_000_000, resources: { food: 200, steel: 200, oil: 50, rareMetals: 600, manpower: 10000 }, govType: 'democracy', researchSlots: 2, startTech: ['infantry_1', 'armor_1', 'aircraft_1', 'econ_1'] },
+  tur: { name: 'Turkey', color: '#C8102E', population: 84_000_000, resources: { food: 500, steel: 200, oil: 100, rareMetals: 80, manpower: 4000 }, govType: 'democracy', researchSlots: 1, startTech: ['infantry_1', 'armor_1'] },
+  sau: { name: 'Saudi Arabia', color: '#006C35', population: 35_000_000, resources: { food: 100, steel: 100, oil: 2000, rareMetals: 50, manpower: 15000 }, govType: 'monarchy', researchSlots: 1, startTech: ['infantry_1', 'aircraft_1'] },
+  aus: { name: 'Australia', color: '#00843D', population: 25_000_000, resources: { food: 400, steel: 500, oil: 200, rareMetals: 200, manpower: 8000 }, govType: 'democracy', researchSlots: 1, startTech: ['infantry_1', 'armor_1', 'econ_1'] },
+  can: { name: 'Canada', color: '#FF0000', population: 38_000_000, resources: { food: 600, steel: 300, oil: 600, rareMetals: 200, manpower: 9000 }, govType: 'democracy', researchSlots: 1, startTech: ['infantry_1', 'armor_1', 'econ_1'] },
+  ita: { name: 'Italy', color: '#008C45', population: 60_000_000, resources: { food: 400, steel: 200, oil: 80, rareMetals: 250, manpower: 8000 }, govType: 'democracy', researchSlots: 1, startTech: ['infantry_1', 'armor_1', 'econ_1'] },
+  irn: { name: 'Iran', color: '#239F40', population: 85_000_000, resources: { food: 300, steel: 200, oil: 800, rareMetals: 50, manpower: 3000 }, govType: 'authoritarian', researchSlots: 1, startTech: ['infantry_1', 'support_1'] },
+  egy: { name: 'Egypt', color: '#C09300', population: 104_000_000, resources: { food: 600, steel: 100, oil: 100, rareMetals: 30, manpower: 2000 }, govType: 'authoritarian', researchSlots: 1, startTech: ['infantry_1'] },
+  isr: { name: 'Israel', color: '#0038B8', population: 9_000_000, resources: { food: 100, steel: 100, oil: 20, rareMetals: 300, manpower: 8000 }, govType: 'democracy', researchSlots: 2, startTech: ['infantry_1', 'infantry_2', 'armor_1', 'armor_2', 'aircraft_1', 'support_1', 'support_2'] },
+  pol: { name: 'Poland', color: '#DC143C', population: 38_000_000, resources: { food: 400, steel: 200, oil: 50, rareMetals: 100, manpower: 4000 }, govType: 'democracy', researchSlots: 1, startTech: ['infantry_1', 'armor_1'] },
+  mex: { name: 'Mexico', color: '#006847', population: 130_000_000, resources: { food: 500, steel: 150, oil: 200, rareMetals: 60, manpower: 3000 }, govType: 'democracy', researchSlots: 1, startTech: ['infantry_1'] },
 };
 
 const COLOR_PALETTE = [
@@ -123,6 +124,10 @@ function getCentroidFromGeometry(geometry: any): { lat: number; lng: number } {
   return count > 0 ? { lat: totalLat / count, lng: totalLng / count } : { lat: 0, lng: 0 };
 }
 
+function keyedChance(key: string, chance: number): boolean {
+  return randomFromKey(key) < chance;
+}
+
 export interface WorldData {
   countries: Country[];
   provinces: Province[];
@@ -187,7 +192,7 @@ export async function generateWorld(): Promise<WorldData> {
 
     const centroid = getCentroidFromGeometry(feature.geometry);
     const terrain = inferTerrain(centroid.lat, centroid.lng);
-    const dev = 20 + Math.floor(Math.random() * 60);
+    const dev = randomIntFromKey(`${countryId}:province:dev`, 20, 79);
     const buildings: Building[] = [];
     if (dev >= 30) buildings.push({ type: 'infrastructure', level: Math.min(3, Math.floor(dev / 25)) });
     if (dev >= 50) buildings.push({ type: 'industrialComplex', level: Math.min(3, Math.floor(dev / 30)) });
@@ -198,19 +203,19 @@ export async function generateWorld(): Promise<WorldData> {
       originalCountryId: countryId,
       name: countryName,
       population: popEst,
-      morale: 50 + Math.floor(Math.random() * 40),
-      stability: 40 + Math.floor(Math.random() * 40),
-      corruption: 5 + Math.floor(Math.random() * 30),
+      morale: randomIntFromKey(`${countryId}:province:morale`, 50, 89),
+      stability: randomIntFromKey(`${countryId}:province:stability`, 40, 79),
+      corruption: randomIntFromKey(`${countryId}:province:corruption`, 5, 34),
       resourceProduction: {
         food: terrain === 'plains' ? 30 : terrain === 'forest' ? 15 : terrain === 'jungle' ? 20 : 5,
-        oil: terrain === 'desert' ? 20 : terrain === 'jungle' ? 5 : Math.random() > 0.7 ? 10 : 0,
-        metal: terrain === 'mountain' ? 25 : Math.random() > 0.6 ? 10 : 0,
-        electronics: dev > 60 ? 15 : 0,
-        money: Math.floor(popEst / 100000) + dev * 2,
+        steel: terrain === 'mountain' ? 25 : keyedChance(`${countryId}:province:steel`, 0.4) ? 10 : 0,
+        oil: terrain === 'desert' ? 20 : terrain === 'jungle' ? 5 : keyedChance(`${countryId}:province:oil`, 0.3) ? 10 : 0,
+        rareMetals: dev > 60 ? 15 : terrain === 'mountain' ? 8 : 0,
+        manpower: Math.floor(popEst / 100000) + dev * 2,
       },
       buildings,
       terrain,
-      isCoastal: Math.random() < 0.5,
+      isCoastal: keyedChance(`${countryId}:province:coastal`, 0.5),
       development: dev,
       adjacentProvinces: [],
       geometry: svgPath,
@@ -236,7 +241,7 @@ export async function generateWorld(): Promise<WorldData> {
       const terrain = inferTerrain(centroid.lat, centroid.lng);
       const provId = `usa_${(props.postal || props.adm1_code || stateName).toLowerCase().replace(/[^a-z0-9]/g, '')}`;
       const statePop = Math.round(331_000_000 / Math.max(usStates.length, 1));
-      const dev = 40 + Math.floor(Math.random() * 50);
+      const dev = randomIntFromKey(`${provId}:dev`, 40, 89);
       const buildings: Building[] = [];
       if (dev >= 30) buildings.push({ type: 'infrastructure', level: Math.min(3, Math.floor(dev / 25)) });
       if (dev >= 50) buildings.push({ type: 'industrialComplex', level: Math.min(3, Math.floor(dev / 30)) });
@@ -247,15 +252,15 @@ export async function generateWorld(): Promise<WorldData> {
         originalCountryId: 'usa',
         name: stateName,
         population: statePop,
-        morale: 50 + Math.floor(Math.random() * 40),
-        stability: 50 + Math.floor(Math.random() * 30),
-        corruption: 5 + Math.floor(Math.random() * 20),
+        morale: randomIntFromKey(`${provId}:morale`, 50, 89),
+        stability: randomIntFromKey(`${provId}:stability`, 50, 79),
+        corruption: randomIntFromKey(`${provId}:corruption`, 5, 24),
         resourceProduction: {
         food: terrain === 'plains' ? 30 : terrain === 'forest' ? 15 : terrain === 'jungle' ? 20 : 5,
-        oil: terrain === 'desert' ? 20 : terrain === 'jungle' ? 5 : Math.random() > 0.7 ? 10 : 0,
-        metal: terrain === 'mountain' ? 25 : Math.random() > 0.6 ? 10 : 0,
-          electronics: dev > 60 ? 15 : 0,
-          money: Math.floor(statePop / 100000) + dev * 2,
+        steel: terrain === 'mountain' ? 25 : keyedChance(`${provId}:steel`, 0.4) ? 10 : 0,
+        oil: terrain === 'desert' ? 20 : terrain === 'jungle' ? 5 : keyedChance(`${provId}:oil`, 0.3) ? 10 : 0,
+        rareMetals: dev > 60 ? 15 : terrain === 'mountain' ? 8 : 0,
+        manpower: Math.floor(statePop / 100000) + dev * 2,
         },
         buildings,
         terrain,
@@ -293,20 +298,20 @@ function createCountry(
       color: override.color ?? COLOR_PALETTE[colorIdx % COLOR_PALETTE.length],
       isPlayerControlled: false,
       population: override.population ?? population,
-      stability: 60 + Math.floor(Math.random() * 30),
-      approval: 50 + Math.floor(Math.random() * 30),
+      stability: randomIntFromKey(`${id}:country:stability`, 60, 89),
+      approval: randomIntFromKey(`${id}:country:approval`, 50, 79),
       resources: { ...override.resources },
-      resourceIncome: { food: 0, oil: 0, metal: 0, electronics: 0, money: 0 },
+      resourceIncome: { food: 0, steel: 0, oil: 0, rareMetals: 0, manpower: 0 },
       diplomacy: { relations: {}, embargoes: [] },
       government: {
         type: override.govType,
-        corruption: 10 + Math.floor(Math.random() * 40),
-        bureaucracyEfficiency: 40 + Math.floor(Math.random() * 40),
+        corruption: randomIntFromKey(`${id}:country:corruption`, 10, 49),
+        bureaucracyEfficiency: randomIntFromKey(`${id}:country:bureaucracy`, 40, 79),
         policies: [],
       },
       technology: { researched: override.startTech, activeResearch: [] },
       researchSlots: override.researchSlots,
-      militaryMorale: 60 + Math.floor(Math.random() * 30),
+      militaryMorale: randomIntFromKey(`${id}:country:militaryMorale`, 60, 89),
     };
   }
 
@@ -315,26 +320,26 @@ function createCountry(
     id, name, code, continent,
     color: COLOR_PALETTE[colorIdx % COLOR_PALETTE.length],
     isPlayerControlled: false, population,
-    stability: 40 + Math.floor(Math.random() * 40),
-    approval: 40 + Math.floor(Math.random() * 30),
+    stability: randomIntFromKey(`${id}:country:stability`, 40, 79),
+    approval: randomIntFromKey(`${id}:country:approval`, 40, 69),
     resources: {
       food: Math.round(50 * popFactor),
-      oil: Math.round(20 * popFactor * Math.random()),
-      metal: Math.round(30 * popFactor * Math.random()),
-      electronics: Math.round(10 * popFactor * Math.random()),
-      money: Math.round(200 * popFactor),
+      steel: Math.round(30 * popFactor * randomFromKey(`${id}:country:steel`)),
+      oil: Math.round(20 * popFactor * randomFromKey(`${id}:country:oil`)),
+      rareMetals: Math.round(10 * popFactor * randomFromKey(`${id}:country:rareMetals`)),
+      manpower: Math.round(200 * popFactor),
     },
-    resourceIncome: { food: 0, oil: 0, metal: 0, electronics: 0, money: 0 },
+    resourceIncome: { food: 0, steel: 0, oil: 0, rareMetals: 0, manpower: 0 },
     diplomacy: { relations: {}, embargoes: [] },
     government: {
       type: inferGovernment(name),
-      corruption: 10 + Math.floor(Math.random() * 50),
-      bureaucracyEfficiency: 30 + Math.floor(Math.random() * 50),
+      corruption: randomIntFromKey(`${id}:country:corruption`, 10, 59),
+      bureaucracyEfficiency: randomIntFromKey(`${id}:country:bureaucracy`, 30, 79),
       policies: [],
     },
     technology: { researched: ['infantry_1'], activeResearch: [] },
     researchSlots: 1,
-    militaryMorale: 50 + Math.floor(Math.random() * 30),
+    militaryMorale: randomIntFromKey(`${id}:country:militaryMorale`, 50, 79),
   };
 }
 

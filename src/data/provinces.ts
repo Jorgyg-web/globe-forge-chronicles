@@ -37,10 +37,10 @@ function makeProvince(d: ProvinceDef): Province {
     corruption: 5 + Math.floor(Math.random() * 25),
     resourceProduction: {
       food: d.resources.food ?? 0,
+      steel: d.resources.steel ?? 0,
       oil: d.resources.oil ?? 0,
-      metal: d.resources.metal ?? 0,
-      electronics: d.resources.electronics ?? 0,
-      money: Math.floor(d.pop / 50000) + (d.dev * 5),
+      rareMetals: d.resources.rareMetals ?? 0,
+      manpower: Math.floor(d.pop / 50000) + (d.dev * 5),
     },
     buildings,
     terrain: d.terrain,

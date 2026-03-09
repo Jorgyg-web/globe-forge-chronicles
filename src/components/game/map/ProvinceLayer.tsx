@@ -11,10 +11,11 @@ import { ProvinceOverlayLayer } from './ProvinceOverlayLayer';
 const ZOOM_PROVINCE_BORDERS = 1.5;
 
 const ProvinceLayer: React.FC = () => {
-  const { state, selectedCountryId, selectedProvinceId, setSelectedCountryId, setSelectedProvinceId, selectedArmyId, setActivePanel, dispatch } = useGame();
+  const { state, selectedCountryId, selectedProvinceId, setSelectedCountryId, setSelectedProvinceId, selectedArmyIds, setActivePanel, dispatch } = useGame();
   const { zoom, moveMode, moveTargets, setHoveredCountry, setHoveredProvince } = useMapContext();
 
-  const showProvinceBorders = zoom >= ZOOM_PROVINCE_BORDERS;
+  const showProvinceBorders = zoom >= ZOOM_PROVINCE_BORDERS
+  const showProvinces = zoom > 1.2
 
   // Cache province render data — only recomputes when provinces or countries change
   const cachedProvinces: CachedProvinceData[] = useMemo(() => {
@@ -55,14 +56,16 @@ const ProvinceLayer: React.FC = () => {
   }, [state.armies]);
 
   const handleProvinceClick = useCallback((provId: string, countryId: string) => {
-    if (moveMode && selectedArmyId) {
-      dispatch({ type: 'MOVE_ARMY', armyId: selectedArmyId, targetProvinceId: provId });
+    if (moveMode && selectedArmyIds.length > 0) {
+      for (const armyId of selectedArmyIds) {
+        dispatch({ type: 'MOVE_ARMY', armyId, targetProvinceId: provId });
+      }
       return;
     }
     setSelectedCountryId(countryId);
     setSelectedProvinceId(provId);
     setActivePanel('province');
-  }, [moveMode, selectedArmyId, dispatch, setSelectedCountryId, setSelectedProvinceId, setActivePanel]);
+  }, [moveMode, selectedArmyIds, dispatch, setSelectedCountryId, setSelectedProvinceId, setActivePanel]);
 
   const handleProvinceEnter = useCallback((provId: string, countryId: string) => {
     setHoveredProvince(provId);

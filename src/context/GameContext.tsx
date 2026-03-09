@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useReducer, useCallback, useEffect, useRef, useState } from 'react';
 import { GameState, GameAction, CountryId, ProvinceId, ArmyId } from '@/types/game';
 import { processAction } from '@/engine/GameEngine';
+import { hashStringToSeed, randomIntFromKey } from '@/lib/deterministicRandom';
 import { generateWorld, setCachedWorldData } from '@/map/worldGenerator';
 
 interface GameContextType {
@@ -13,6 +14,9 @@ interface GameContextType {
   setSelectedProvinceId: (id: ProvinceId | null) => void;
   selectedArmyId: ArmyId | null;
   setSelectedArmyId: (id: ArmyId | null) => void;
+  selectedArmyIds: ArmyId[];
+  toggleArmySelection: (id: ArmyId, shiftHeld?: boolean) => void;
+  setSelectedArmyIds: (ids: ArmyId[]) => void;
   activePanel: PanelType;
   setActivePanel: (panel: PanelType) => void;
   worldLoading: boolean;
@@ -25,6 +29,8 @@ const GameContext = createContext<GameContextType | null>(null);
 function createEmptyState(): GameState {
   return {
     turn: 0, year: 2025, month: 1,
+    rngSeed: hashStringToSeed('globe-forge-chronicles:runtime'),
+    nextEntityId: 1,
     countries: {}, provinces: {}, armies: {},
     wars: [], alliances: [], tradeAgreements: [],
     playerCountryId: 'usa',
@@ -40,7 +46,7 @@ function initializeDiplomacy(countries: Record<CountryId, import('@/types/game')
     const relations: Record<string, number> = {};
     for (const otherId of ids) {
       if (otherId === id) continue;
-      let base = Math.floor(Math.random() * 60) - 20;
+      let base = randomIntFromKey(`relation:${id}:${otherId}`, -20, 39);
       // Preserve special relations for original 20 countries
       if ((id === 'usa' && otherId === 'gbr') || (id === 'gbr' && otherId === 'usa')) base = 80;
       if ((id === 'usa' && otherId === 'can') || (id === 'can' && otherId === 'usa')) base = 85;
@@ -67,8 +73,22 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const [selectedCountryId, setSelectedCountryId] = React.useState<CountryId | null>('usa');
   const [selectedProvinceId, setSelectedProvinceId] = React.useState<ProvinceId | null>(null);
   const [selectedArmyId, setSelectedArmyId] = React.useState<ArmyId | null>(null);
+  const [selectedArmyIds, setSelectedArmyIds] = React.useState<ArmyId[]>([]);
   const [activePanel, setActivePanel] = React.useState<PanelType>('overview');
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
+  const movementFrameRef = useRef<number | null>(null);
+
+  const toggleArmySelection = useCallback((id: ArmyId, shiftHeld = false) => {
+    if (!shiftHeld) {
+      setSelectedArmyIds([id]);
+      setSelectedArmyId(id);
+    } else {
+      setSelectedArmyIds(prev => 
+        prev.includes(id) ? prev.filter(aid => aid !== id) : [...prev, id]
+      );
+      setSelectedArmyId(id);
+    }
+  }, []);
 
   // Load world data on mount
   useEffect(() => {
@@ -95,7 +115,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
           const isMajor = majorPowers.includes(id) || majorPowers.includes(otherId);
           const sameContinent = countryMap[id].continent === countryMap[otherId].continent;
           if (isMajor || sameContinent) {
-            let base = Math.floor(Math.random() * 60) - 20;
+            let base = randomIntFromKey(`relation:${id}:${otherId}`, -20, 39);
             if ((id === 'usa' && otherId === 'gbr') || (id === 'gbr' && otherId === 'usa')) base = 80;
             if ((id === 'usa' && otherId === 'can') || (id === 'can' && otherId === 'usa')) base = 85;
             if ((id === 'usa' && otherId === 'rus') || (id === 'rus' && otherId === 'usa')) base = -30;
@@ -119,6 +139,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         type: 'INIT_WORLD',
         payload: {
           turn: 0, year: 2025, month: 1,
+          rngSeed: hashStringToSeed('globe-forge-chronicles:runtime'),
+          nextEntityId: 1,
           countries: countryMap,
           provinces: provinceMap,
           armies: {},
@@ -147,6 +169,37 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [state.paused, speedMs, worldLoading]);
 
+  useEffect(() => {
+    if (state.paused || worldLoading) {
+      if (movementFrameRef.current != null) {
+        cancelAnimationFrame(movementFrameRef.current);
+        movementFrameRef.current = null;
+      }
+      return;
+    }
+
+    let lastTime = performance.now();
+
+    const tick = (now: number) => {
+      const elapsedMs = Math.max(0, Math.min(250, now - lastTime));
+      lastTime = now;
+      const deltaTurns = elapsedMs / speedMs;
+      if (deltaTurns > 0) {
+        dispatch({ type: 'UPDATE_ARMY_MOVEMENT', deltaTurns });
+      }
+      movementFrameRef.current = requestAnimationFrame(tick);
+    };
+
+    movementFrameRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      if (movementFrameRef.current != null) {
+        cancelAnimationFrame(movementFrameRef.current);
+        movementFrameRef.current = null;
+      }
+    };
+  }, [state.paused, speedMs, worldLoading]);
+
   const wrappedDispatch = useCallback((action: GameAction) => { dispatch(action); }, []);
 
   return (
@@ -155,6 +208,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       selectedCountryId, setSelectedCountryId,
       selectedProvinceId, setSelectedProvinceId,
       selectedArmyId, setSelectedArmyId,
+      selectedArmyIds, toggleArmySelection, setSelectedArmyIds,
       activePanel, setActivePanel,
       worldLoading,
     }}>

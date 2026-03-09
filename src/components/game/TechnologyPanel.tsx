@@ -2,6 +2,17 @@ import { useGame } from '@/context/GameContext';
 import { TECHNOLOGIES, TECH_CATEGORIES, TECH_CATEGORY_INFO } from '@/data/technologies';
 import { FlaskConical, Lock, Check, Loader2, Zap, X } from 'lucide-react';
 
+const EFFECT_LABELS: Record<string, string> = {
+  infantry_attack: 'Infantry attack',
+  armor_attack: 'Armor attack',
+  air_attack: 'Air attack',
+  naval_attack: 'Naval attack',
+  tank_speed: 'Tank speed',
+  industry_output: 'Industry output',
+  logistics_speed: 'Logistics speed',
+  unit_production_speed: 'Unit production speed',
+};
+
 const TechnologyPanel = () => {
   const { state, dispatch } = useGame();
   const country = state.countries[state.playerCountryId];
@@ -53,7 +64,7 @@ const TechnologyPanel = () => {
                   <div className="flex items-center justify-between mb-1">
                     <span className="text-xs font-medium text-foreground">{t.name}</span>
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-mono text-muted-foreground">{ar.progress}/{t.cost}</span>
+                      <span className="text-[10px] font-mono text-muted-foreground">{ar.progress}/{t.cost} RP · {ar.turnsSpent}/{t.researchTime}t</span>
                       <button onClick={() => dispatch({ type: 'CANCEL_RESEARCH', countryId: state.playerCountryId, techId: ar.techId })}
                         className="p-0.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-all">
                         <X size={10} />
@@ -72,7 +83,7 @@ const TechnologyPanel = () => {
 
       {/* Tech Tree */}
       {TECH_CATEGORIES.map(cat => {
-        const techs = TECHNOLOGIES.filter(t => t.category === cat).sort((a, b) => a.tier - b.tier);
+        const techs = TECHNOLOGIES.filter(t => t.category === cat).sort((a, b) => a.cost - b.cost);
         const info = TECH_CATEGORY_INFO[cat];
         const completed = techs.filter(t => tech.researched.includes(t.id)).length;
 
@@ -105,13 +116,12 @@ const TechnologyPanel = () => {
                         )}
                         <div>
                           <span className={`text-xs font-medium ${isResearched ? 'text-stat-positive' : 'text-foreground'}`}>{t.name}</span>
-                          <span className="text-[9px] text-muted-foreground ml-2">Tier {t.tier}</span>
+                          <span className="text-[9px] text-muted-foreground ml-2">{t.researchTime} turns</span>
                         </div>
                       </div>
                       <span className="text-[9px] font-mono text-muted-foreground">{t.cost} RP</span>
                     </div>
-                    <p className="text-[10px] text-muted-foreground ml-6 mb-1">{t.description}</p>
-                    <p className="text-[10px] text-stat-positive ml-6">{t.effects.map(e => e.description).join(' · ')}</p>
+                    <p className="text-[10px] text-stat-positive ml-6">{t.effects.map(e => `+${Math.round(e.modifier * 100)}% ${EFFECT_LABELS[e.target]}`).join(' · ')}</p>
                     {t.unlocksUnit && <p className="text-[10px] text-primary ml-6">Unlocks: {t.unlocksUnit}</p>}
                     {available && tech.activeResearch.length < country.researchSlots && (
                       <button onClick={() => dispatch({ type: 'START_RESEARCH', countryId: state.playerCountryId, techId: t.id })}

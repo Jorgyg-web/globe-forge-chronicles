@@ -3,7 +3,7 @@ import { UnitStats, UnitType } from '@/types/game';
 export const UNIT_STATS: Record<UnitType, UnitStats> = {
   infantry: {
     name: 'Infantry',
-    cost: { food: 50, oil: 0, metal: 20, electronics: 5, money: 100 },
+    cost: { food: 50, steel: 20, oil: 0, rareMetals: 5, manpower: 15 },
     buildTime: 2,
     health: 100, attack: 8, defense: 10, speed: 2, range: 0, supplyUsage: 1,
     armorClass: 'unarmored',
@@ -14,7 +14,7 @@ export const UNIT_STATS: Record<UnitType, UnitStats> = {
   },
   motorizedInfantry: {
     name: 'Motorized Infantry',
-    cost: { food: 40, oil: 30, metal: 50, electronics: 20, money: 200 },
+    cost: { food: 30, steel: 50, oil: 30, rareMetals: 10, manpower: 20 },
     buildTime: 3,
     health: 90, attack: 10, defense: 8, speed: 4, range: 0, supplyUsage: 2,
     armorClass: 'light',
@@ -26,7 +26,7 @@ export const UNIT_STATS: Record<UnitType, UnitStats> = {
   },
   armoredCar: {
     name: 'Armored Car',
-    cost: { food: 0, oil: 40, metal: 80, electronics: 30, money: 300 },
+    cost: { food: 0, steel: 80, oil: 40, rareMetals: 20, manpower: 10 },
     buildTime: 3,
     health: 120, attack: 12, defense: 12, speed: 3, range: 0, supplyUsage: 2,
     armorClass: 'light',
@@ -38,7 +38,7 @@ export const UNIT_STATS: Record<UnitType, UnitStats> = {
   },
   tank: {
     name: 'Tank',
-    cost: { food: 0, oil: 80, metal: 200, electronics: 50, money: 800 },
+    cost: { food: 0, steel: 200, oil: 80, rareMetals: 30, manpower: 15 },
     buildTime: 5,
     health: 200, attack: 25, defense: 20, speed: 2, range: 0, supplyUsage: 4,
     armorClass: 'heavy',
@@ -50,7 +50,7 @@ export const UNIT_STATS: Record<UnitType, UnitStats> = {
   },
   artillery: {
     name: 'Artillery',
-    cost: { food: 0, oil: 20, metal: 150, electronics: 30, money: 500 },
+    cost: { food: 0, steel: 150, oil: 20, rareMetals: 15, manpower: 10 },
     buildTime: 4,
     health: 60, attack: 30, defense: 4, speed: 1, range: 2, supplyUsage: 3,
     armorClass: 'unarmored',
@@ -62,7 +62,7 @@ export const UNIT_STATS: Record<UnitType, UnitStats> = {
   },
   antiTank: {
     name: 'Anti-Tank',
-    cost: { food: 20, oil: 10, metal: 100, electronics: 40, money: 350 },
+    cost: { food: 20, steel: 100, oil: 10, rareMetals: 10, manpower: 8 },
     buildTime: 3,
     health: 70, attack: 20, defense: 6, speed: 2, range: 1, supplyUsage: 2,
     armorClass: 'unarmored',
@@ -74,7 +74,7 @@ export const UNIT_STATS: Record<UnitType, UnitStats> = {
   },
   antiAir: {
     name: 'Anti-Air',
-    cost: { food: 0, oil: 30, metal: 120, electronics: 80, money: 400 },
+    cost: { food: 0, steel: 120, oil: 30, rareMetals: 25, manpower: 8 },
     buildTime: 3,
     health: 60, attack: 18, defense: 6, speed: 2, range: 1, supplyUsage: 2,
     armorClass: 'unarmored',
@@ -86,7 +86,7 @@ export const UNIT_STATS: Record<UnitType, UnitStats> = {
   },
   fighter: {
     name: 'Fighter',
-    cost: { food: 0, oil: 100, metal: 150, electronics: 200, money: 1500 },
+    cost: { food: 0, steel: 150, oil: 100, rareMetals: 50, manpower: 20 },
     buildTime: 6,
     health: 100, attack: 22, defense: 10, speed: 6, range: 3, supplyUsage: 5,
     armorClass: 'aircraft',
@@ -98,7 +98,7 @@ export const UNIT_STATS: Record<UnitType, UnitStats> = {
   },
   bomber: {
     name: 'Bomber',
-    cost: { food: 0, oil: 150, metal: 200, electronics: 150, money: 2000 },
+    cost: { food: 0, steel: 200, oil: 150, rareMetals: 40, manpower: 25 },
     buildTime: 7,
     health: 80, attack: 35, defense: 5, speed: 4, range: 3, supplyUsage: 6,
     armorClass: 'aircraft',
@@ -110,7 +110,7 @@ export const UNIT_STATS: Record<UnitType, UnitStats> = {
   },
   drone: {
     name: 'Combat Drone',
-    cost: { food: 0, oil: 30, metal: 60, electronics: 150, money: 500 },
+    cost: { food: 0, steel: 60, oil: 30, rareMetals: 40, manpower: 10 },
     buildTime: 3,
     health: 40, attack: 15, defense: 3, speed: 5, range: 2, supplyUsage: 1,
     armorClass: 'aircraft',
@@ -122,7 +122,7 @@ export const UNIT_STATS: Record<UnitType, UnitStats> = {
   },
   missileSystem: {
     name: 'Missile System',
-    cost: { food: 0, oil: 60, metal: 180, electronics: 250, money: 2500 },
+    cost: { food: 0, steel: 180, oil: 60, rareMetals: 60, manpower: 20 },
     buildTime: 6,
     health: 50, attack: 50, defense: 2, speed: 1, range: 4, supplyUsage: 5,
     armorClass: 'unarmored',

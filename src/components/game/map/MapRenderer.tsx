@@ -14,7 +14,8 @@ const MapRenderer: React.FC<MapRendererProps> = ({ zoom, pan, isPanning, moveMod
   return (
     <svg viewBox="0 0 800 450" className="w-full h-full" preserveAspectRatio="xMidYMid meet"
       style={{
-        transform: `scale(${zoom}) translate(${pan.x / zoom}px, ${pan.y / zoom}px)`,
+        transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+        transformOrigin: "0 0",
         transition: isPanning ? 'none' : 'transform 0.15s ease-out',
         cursor: moveMode ? 'crosshair' : isPanning ? 'grabbing' : 'grab',
       }}>
@@ -30,6 +31,9 @@ const MapRenderer: React.FC<MapRendererProps> = ({ zoom, pan, isPanning, moveMod
         </marker>
         <marker id="arrowheadRed" markerWidth="6" markerHeight="4" refX="5" refY="2" orient="auto">
           <polygon points="0 0, 6 2, 0 4" fill="hsl(0, 72%, 51%)" opacity="0.8" />
+          <filter id="terrainNoise">
+          <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" />
+        </filter>
         </marker>
       </defs>
       <rect width="800" height="450" fill="url(#gridPattern)" />

@@ -11,11 +11,11 @@ interface ProvinceOverlayLayerProps {
 }
 
 // Zoom thresholds - adjusted for better readability
-const ZOOM_COUNTRY_LABELS = 0.5;   // always show country names when zoomed out
-const ZOOM_PROVINCE_BORDERS = 1.5; // medium: show province borders
-const ZOOM_MAJOR_LABELS = 2.0;     // medium: show major province names (large provinces)
-const ZOOM_ALL_LABELS = 2.8;       // close: show all province labels
-const ZOOM_DETAILS = 3.2;          // close: show stats, morale bars, building counts
+const ZOOM_COUNTRY_LABELS = 0.6
+const ZOOM_PROVINCE_BORDERS = 1.8
+const ZOOM_MAJOR_LABELS = 2.4
+const ZOOM_ALL_LABELS = 3.2
+const ZOOM_DETAILS = 3.8        // close: show stats, morale bars, building counts
 
 interface LabelBounds {
   x: number;

@@ -17,7 +17,8 @@ function estimateETA(army: Army, state: { provinces: Record<string, any> }): str
   const targetProv = state.provinces[army.targetProvinceId];
   const terrainCost = targetProv ? (TERRAIN_MOVEMENT_COST[targetProv.terrain] ?? 1) : 1;
   const movePerTurn = (minSpeed * infraBonus) / terrainCost * 0.4;
-  const remaining = 1 - army.movementProgress;
+  const progress = army.movementProgress ?? 0;
+  const remaining = 1 - progress;
   const turns = Math.ceil(remaining / movePerTurn);
   return `${turns}t`;
 }
@@ -31,7 +32,7 @@ function getDominantUnitIcon(army: Army): string {
 }
 
 const ArmyLayer: React.FC = () => {
-  const { state, selectedArmyId, setSelectedArmyId, setActivePanel } = useGame();
+  const { state, selectedArmyId, selectedArmyIds, toggleArmySelection, setActivePanel } = useGame();
   const { zoom } = useMapContext();
   // Show armies at medium-close zoom (2.0+), movement arrows slightly earlier (1.8+)
   const showArmies = zoom >= 2.0;
@@ -59,8 +60,8 @@ const ArmyLayer: React.FC = () => {
     });
   }, [state.activeBattles]);
 
-  const handleArmyClick = (armyId: string) => {
-    setSelectedArmyId(selectedArmyId === armyId ? null : armyId);
+  const handleArmyClick = (armyId: string, e?: React.MouseEvent) => {
+    toggleArmySelection(armyId, e?.shiftKey ?? false);
     setActivePanel('military');
   };
 
@@ -70,23 +71,33 @@ const ArmyLayer: React.FC = () => {
       {showMovement && armyPositions.filter(a => a.targetX != null).map(({ army, x, y, targetX, targetY }) => {
         if (!targetX || !targetY) return null;
         const isPlayer = army.countryId === state.playerCountryId;
-        const cx = x + (targetX - x) * army.movementProgress;
-        const cy = y + (targetY - y) * army.movementProgress;
+        const progress = army.movementProgress ?? 0;
+        const cx = x + (targetX - x) * progress;
+        const cy = y + (targetY - y) * progress;
         const eta = estimateETA(army, state);
         const midX = (x + targetX) / 2;
         const midY = (y + targetY) / 2;
-        const isSelected = selectedArmyId === army.id;
+        const isSelected = selectedArmyIds.includes(army.id);
         const totalUnits = army.units.reduce((s, u) => s + u.count, 0);
         const icon = getDominantUnitIcon(army);
 
         return (
-          <g key={`move_${army.id}`} onClick={(e) => { e.stopPropagation(); handleArmyClick(army.id); }} className="cursor-pointer">
-            {/* Path line */}
+          <g key={`move_${army.id}`} onClick={(e) => { e.stopPropagation(); handleArmyClick(army.id, e); }} className="cursor-pointer">
+            {/* Path line with animation */}
             <line x1={x} y1={y} x2={targetX} y2={targetY}
               stroke={isPlayer ? 'hsl(42, 100%, 58%)' : 'hsl(0, 72%, 51%)'}
-              strokeWidth={isSelected ? 1.2 : 0.8} strokeDasharray="3,2" opacity={0.6}
-              markerEnd={isPlayer ? 'url(#arrowhead)' : 'url(#arrowheadRed)'} />
-
+              strokeWidth={isSelected ? 2 : 1.3} 
+              strokeDasharray="5,3" 
+              opacity={0.7}
+              markerEnd={isPlayer ? 'url(#arrowhead)' : 'url(#arrowheadRed)'}>
+              <animate
+                attributeName="strokeDashoffset"
+                from="0"
+                to="-8"
+                dur="0.6s"
+                repeatCount="indefinite"
+              />
+            </line>
             {/* ETA label at midpoint */}
             <rect x={midX - 5} y={midY - 4} width={10} height={5} rx={1.5}
               fill="hsl(var(--background))" opacity={0.85} stroke={isPlayer ? 'hsl(42, 100%, 58%)' : 'hsl(0, 72%, 51%)'} strokeWidth={0.3} />
@@ -120,13 +131,13 @@ const ArmyLayer: React.FC = () => {
       {showArmies && armyPositions.filter(a => !a.army.targetProvinceId).map(({ army, x, y }) => {
         const totalUnits = army.units.reduce((s, u) => s + u.count, 0);
         const isPlayer = army.countryId === state.playerCountryId;
-        const isSelected = selectedArmyId === army.id;
+        const isSelected = selectedArmyIds.includes(army.id);
         const countryColor = state.countries[army.countryId]?.color ?? '#888';
         const icon = getDominantUnitIcon(army);
         const avgHealth = army.units.reduce((s, u) => s + u.health * u.count, 0) / Math.max(1, totalUnits);
 
         return (
-          <g key={army.id} onClick={(e) => { e.stopPropagation(); handleArmyClick(army.id); }} className="cursor-pointer">
+          <g key={army.id} onClick={(e) => { e.stopPropagation(); handleArmyClick(army.id, e); }} className="cursor-pointer">
             {/* Selection glow */}
             {isSelected && (
               <>
@@ -138,6 +149,16 @@ const ArmyLayer: React.FC = () => {
             )}
 
             {/* Army badge */}
+            {isPlayer && (
+              <circle
+                cx={x}
+                cy={y - 3}
+                r={9}
+                fill="hsl(var(--primary))"
+                opacity={0.15}
+                filter="url(#glow)"
+              />
+            )}
             <rect x={x - 7} y={y - 8} width={14} height={9} rx={2}
               fill={isPlayer ? 'hsl(var(--primary))' : countryColor}
               stroke={isSelected ? 'hsl(var(--foreground))' : 'hsl(var(--background))'} strokeWidth={isSelected ? 1 : 0.4} opacity={0.95} />
@@ -178,5 +199,7 @@ const ArmyLayer: React.FC = () => {
     </>
   );
 };
+
+export { estimateETA, getDominantUnitIcon };
 
 export default React.memo(ArmyLayer);

@@ -15,14 +15,22 @@ const BaseMapLayer: React.FC = () => {
   if (!combinedPath) return null;
 
   return (
-    <path
-      d={combinedPath}
-      fill="hsl(var(--map-land))"
-      stroke="hsl(var(--map-border))"
-      strokeWidth={0.3}
-      opacity={0.18}
-      style={{ pointerEvents: 'none' }}
-    />
+    <>
+      <path
+        d={combinedPath}
+        fill="hsl(var(--map-land))"
+        stroke="hsl(var(--map-border))"
+        strokeWidth={0.3}
+        opacity={0.18}
+        style={{ pointerEvents: 'none' }}
+      />
+      <rect
+        width="800"
+        height="450"
+        fill="url(#terrainNoise)"
+        opacity="0.05"
+      />
+    </>
   );
 };
 
