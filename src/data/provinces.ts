@@ -122,7 +122,7 @@ const PROVINCE_DEFS: ProvinceDef[] = [
 
   // ─── France ───
   { id: 'fra_idf', countryId: 'fra', name: 'Île-de-France', pop: 12_000_000, terrain: 'urban', isCoastal: false, dev: 90,
-    resources: { electronics: 25, money: 400 }, buildings: { aircraftFactory: 1, tankFactory: 1 },
+    resources: { electronics: 25, money: 400 }, buildings: { airbase: 1, militaryBase: 1 },
     adjacent: ['fra_n', 'fra_e', 'fra_s'] },
   { id: 'fra_s', countryId: 'fra', name: 'South France', pop: 20_000_000, terrain: 'coastal', isCoastal: true, dev: 72,
     resources: { food: 50, money: 200 }, buildings: { navalBase: 1 },
