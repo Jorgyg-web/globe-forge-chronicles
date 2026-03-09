@@ -396,8 +396,8 @@ function processResourceIncome(state: GameState): GameState {
     for (const prov of provs) {
       const moraleMultiplier = prov.morale / 100;
       const corruptionPenalty = 1 - prov.corruption / 200;
-      const extractorBonus = 1 + (prov.buildings.find(b => b.type === 'resourceExtractor')?.level ?? 0) * 0.15;
-      const industryBonus = 1 + (prov.buildings.find(b => b.type === 'industry')?.level ?? 0) * 0.1;
+      const extractorBonus = 1 + (prov.buildings.find(b => b.type === 'resourceExtractor')?.level ?? 0) * 0.18;
+      const industryBonus = 1 + (prov.buildings.find(b => b.type === 'industrialComplex')?.level ?? 0) * 0.15;
 
       for (const key of RESOURCE_KEYS) {
         income[key] += Math.floor(prov.resourceProduction[key] * moraleMultiplier * corruptionPenalty * extractorBonus * industryBonus);
