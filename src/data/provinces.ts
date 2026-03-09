@@ -139,7 +139,7 @@ const PROVINCE_DEFS: ProvinceDef[] = [
     resources: { food: 20, electronics: 30, money: 350 }, buildings: { navalBase: 1 },
     adjacent: ['deu_s', 'deu_e', 'deu_w', 'pol_n'] },
   { id: 'deu_s', countryId: 'deu', name: 'South Germany', pop: 30_000_000, terrain: 'forest', isCoastal: false, dev: 88,
-    resources: { metal: 25, electronics: 40, money: 450 }, buildings: { tankFactory: 1 },
+    resources: { metal: 25, electronics: 40, money: 450 }, buildings: { militaryBase: 1 },
     adjacent: ['deu_n', 'deu_e', 'deu_w', 'fra_e', 'ita_n'] },
   { id: 'deu_e', countryId: 'deu', name: 'East Germany', pop: 16_000_000, terrain: 'plains', isCoastal: false, dev: 72,
     resources: { food: 20, metal: 15, money: 200 },
