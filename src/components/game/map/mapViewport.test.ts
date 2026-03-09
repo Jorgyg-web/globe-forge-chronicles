@@ -21,9 +21,9 @@ function cam(zoom = 1, cx = MAP_WORLD_WIDTH / 2, cy = MAP_WORLD_HEIGHT / 2): Cam
 
 describe('mapViewport helpers', () => {
   it('clamps zoom to supported range', () => {
-    expect(clampZoom(0.1)).toBe(0.8);
+    expect(clampZoom(0.1)).toBe(0.55);
     expect(clampZoom(3)).toBe(3);
-    expect(clampZoom(60)).toBe(50);
+    expect(clampZoom(100)).toBe(80);
   });
 
   it('computes viewBox from camera state', () => {

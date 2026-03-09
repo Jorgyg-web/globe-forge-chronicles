@@ -18,6 +18,9 @@ export const ProvinceOverlayLayer: React.FC<ProvinceOverlayLayerProps> = React.m
 }) => {
   const showProvinceBorders = zoom >= ZOOM_PROVINCE_BORDERS;
   const showDetails = zoom >= ZOOM_DETAILS;
+  const selectedCountryStrokeWidth = Math.max(0.18, 0.7 - zoom * 0.08);
+  const moveTargetStrokeWidth = Math.max(0.28, 1.1 - zoom * 0.1);
+  const selectedProvinceStrokeWidth = Math.max(0.35, 1.35 - zoom * 0.12);
 
   return (
     <g style={{ pointerEvents: 'none' }}>
@@ -26,21 +29,26 @@ export const ProvinceOverlayLayer: React.FC<ProvinceOverlayLayerProps> = React.m
         .filter(p => p.countryId === selectedCountryId && p.id !== selectedProvinceId)
         .map(p => (
           <path key={`sel_c_${p.id}`} d={p.geometry}
-            fill="none" stroke="hsl(var(--primary))" strokeWidth={0.6} opacity={0.5} />
+            fill="none" stroke="hsl(var(--primary))" strokeWidth={selectedCountryStrokeWidth}
+            opacity={0.5} vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
         ))}
 
       {/* Move targets */}
       {Array.from(moveTargets).map(id => {
         const p = provinces.find(pr => pr.id === id);
         if (!p) return null;
-        return <path key={`mt_${id}`} d={p.geometry} fill="hsl(var(--success))" opacity={0.4} stroke="hsl(var(--success))" strokeWidth={1.2} />;
+        return <path key={`mt_${id}`} d={p.geometry} fill="hsl(var(--success))" opacity={0.4}
+          stroke="hsl(var(--success))" strokeWidth={moveTargetStrokeWidth}
+          vectorEffect="non-scaling-stroke" strokeLinejoin="round" />;
       })}
 
       {/* Selected province */}
       {selectedProvinceId && (() => {
         const p = provinces.find(pr => pr.id === selectedProvinceId);
         if (!p) return null;
-        return <path d={p.geometry} fill="hsl(var(--primary))" opacity={0.5} stroke="hsl(var(--primary))" strokeWidth={1.5} />;
+        return <path d={p.geometry} fill="hsl(var(--primary))" opacity={0.5}
+          stroke="hsl(var(--primary))" strokeWidth={selectedProvinceStrokeWidth}
+          vectorEffect="non-scaling-stroke" strokeLinejoin="round" />;
       })()}
 
       {/* === ZOOM LEVEL: Detail indicators (close zoom) === */}

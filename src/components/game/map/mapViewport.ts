@@ -42,8 +42,8 @@ export interface BoundsLike {
 
 export const MAP_WORLD_WIDTH = 800;
 export const MAP_WORLD_HEIGHT = 450;
-export const MIN_ZOOM = 0.8;
-export const MAX_ZOOM = 50;
+export const MIN_ZOOM = 0.55;
+export const MAX_ZOOM = 80;
 
 // ─── Camera state ──────────────────────────────────────────────────
 
