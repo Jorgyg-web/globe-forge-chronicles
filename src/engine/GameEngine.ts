@@ -939,11 +939,11 @@ function processAI(state: GameState, countryId: CountryId, events: GameEvent[]):
     }
   }
 
-  // Build barracks in provinces that don't have them
+  // Build military base in provinces that don't have them
   if (s.turn % 3 === 0) {
     for (const prov of provs) {
-      if (!prov.buildings.some(b => b.type === 'barracks') && canAfford(s.countries[countryId].resources, scaleResources(BUILDING_INFO.barracks.baseCost, 1))) {
-        s = processAction(s, { type: 'BUILD_IN_PROVINCE', provinceId: prov.id, buildingType: 'barracks' });
+      if (!prov.buildings.some(b => b.type === 'militaryBase') && canAfford(s.countries[countryId].resources, scaleResources(BUILDING_INFO.militaryBase.baseCost, 1))) {
+        s = processAction(s, { type: 'BUILD_IN_PROVINCE', provinceId: prov.id, buildingType: 'militaryBase' });
         break;
       }
     }
@@ -952,7 +952,7 @@ function processAI(state: GameState, countryId: CountryId, events: GameEvent[]):
   // Produce units
   if (s.turn % 4 === 0) {
     for (const prov of provs) {
-      if (prov.buildings.some(b => b.type === 'barracks') && canAfford(s.countries[countryId].resources, scaleResources(UNIT_STATS.infantry.cost, 5))) {
+      if (prov.buildings.some(b => b.type === 'militaryBase') && canAfford(s.countries[countryId].resources, scaleResources(UNIT_STATS.infantry.cost, 5))) {
         s = processAction(s, { type: 'PRODUCE_UNITS', provinceId: prov.id, unitType: 'infantry', quantity: 5 });
         break;
       }
