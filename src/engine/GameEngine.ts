@@ -511,7 +511,7 @@ function processAllResearch(state: GameState, events: GameEvent[]): GameState {
     const provs = getProvincesForCountry(s.provinces, countryId);
     let rpPerTurn = 5;
     for (const p of provs) {
-      rpPerTurn += (p.buildings.find(b => b.type === 'industry')?.level ?? 0) * 2;
+      rpPerTurn += (p.buildings.find(b => b.type === 'industrialComplex')?.level ?? 0) * 2;
     }
     const country = s.countries[countryId];
     if (country.technology.activeResearch.length === 0) continue;
