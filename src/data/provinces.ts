@@ -97,7 +97,7 @@ const PROVINCE_DEFS: ProvinceDef[] = [
     resources: { food: 50, oil: 20, money: 150 },
     adjacent: ['rus_w', 'rus_u', 'tur_e'] },
   { id: 'rus_u', countryId: 'rus', name: 'Urals', pop: 15_000_000, terrain: 'mountain', isCoastal: false, dev: 55,
-    resources: { metal: 80, oil: 40, money: 120 }, buildings: { tankFactory: 1 },
+    resources: { metal: 80, oil: 40, money: 120 }, buildings: { militaryBase: 1 },
     adjacent: ['rus_w', 'rus_s', 'rus_si'] },
   { id: 'rus_si', countryId: 'rus', name: 'Siberia', pop: 14_000_000, terrain: 'arctic', isCoastal: true, dev: 35,
     resources: { oil: 70, metal: 50, money: 80 },
