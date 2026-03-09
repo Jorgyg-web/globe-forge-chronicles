@@ -271,7 +271,7 @@ const PROVINCE_DEFS: ProvinceDef[] = [
 
   // ─── Italy ───
   { id: 'ita_n', countryId: 'ita', name: 'Northern Italy', pop: 28_000_000, terrain: 'urban', isCoastal: true, dev: 80,
-    resources: { food: 15, electronics: 20, money: 350 }, buildings: { tankFactory: 1 },
+    resources: { food: 15, electronics: 20, money: 350 }, buildings: { militaryBase: 1 },
     adjacent: ['ita_c', 'fra_s', 'deu_s'] },
   { id: 'ita_c', countryId: 'ita', name: 'Central Italy', pop: 12_000_000, terrain: 'plains', isCoastal: true, dev: 72,
     resources: { food: 30, money: 200 },
