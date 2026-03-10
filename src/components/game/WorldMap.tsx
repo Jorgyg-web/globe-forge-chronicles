@@ -6,16 +6,19 @@ import MapRenderer from './map/MapRenderer';
 import LabelLayer from './map/LabelLayer';
 import MapTooltipLayer from './map/MapTooltipLayer';
 import MapControls from './map/MapControls';
+import MiniMap from './map/MiniMap';
 import { screenToWorld } from './map/mapViewport';
 import { getProvinceCentroid } from '@/data/provinceGeometry';
 import { ProvinceManager } from '@/map/ProvinceManager';
+import { MapLayerMode } from './map/mapConstants';
 
 const WorldMap = () => {
-  const { state, selectedArmyIds, setSelectedArmyIds, worldLoading,
-    selectedCountryId, setSelectedCountryId, selectedProvinceId, setSelectedProvinceId,
+  const { state, selectedCountryId, selectedProvinceId, selectedArmyIds, setSelectedArmyIds, worldLoading,
+    setSelectedCountryId, setSelectedProvinceId, setSelectedArmyId, setSelectedBuilding,
     setActivePanel, dispatch } = useGame();
   const [hoveredCountry, setHoveredCountry] = useState<string | null>(null);
   const [hoveredProvince, setHoveredProvince] = useState<string | null>(null);
+  const [mapLayer, setMapLayer] = useState<MapLayerMode>('political');
   const [camera, setCamera] = useState(DEFAULT_MAP_CAMERA);
   const [isZooming, setIsZooming] = useState(false);
   const cameraRef = useRef(camera);
@@ -229,14 +232,20 @@ const WorldMap = () => {
                 }
               } else if (showProvinces) {
                 // Zoomed in: select province + country
+                setSelectedArmyId(null);
+                setSelectedArmyIds([]);
+                setSelectedBuilding(null);
                 setSelectedCountryId(prov.countryId);
                 setSelectedProvinceId(provId);
-                setActivePanel('province');
+                setActivePanel('info');
               } else {
                 // Zoomed out: select country only
+                setSelectedArmyId(null);
+                setSelectedArmyIds([]);
+                setSelectedBuilding(null);
                 setSelectedCountryId(prov.countryId);
                 setSelectedProvinceId(null);
-                setActivePanel('overview');
+                setActivePanel('info');
               }
             }
           }
@@ -257,6 +266,14 @@ const WorldMap = () => {
   }, []);
 
   const resetView = () => { setCamera(resetMapCamera()); };
+
+  const handleMiniMapNavigate = useCallback((nextCenter: { x: number; y: number }) => {
+    setCamera(current => ({
+      ...current,
+      centerX: nextCenter.x,
+      centerY: nextCenter.y,
+    }));
+  }, []);
 
   const zoomByStep = useCallback((factor: number) => {
     applyZoomAtPoint(cameraRef.current.zoom * factor, {
@@ -288,11 +305,13 @@ const WorldMap = () => {
   }, []);
 
   const mapContextValue = useMemo(() => ({
+    mapLayer,
+    setMapLayer,
     zoom: camera.zoom, isZooming, showProvinces, showDetails, moveMode, setMoveMode, moveTargets,
     hoveredCountry, setHoveredCountry, hoveredProvince, setHoveredProvince,
     mousePos, containerRef: containerRef as React.RefObject<HTMLDivElement>,
     viewport,
-  }), [camera.zoom, isZooming, showProvinces, showDetails, moveMode, setMoveMode, moveTargets, hoveredCountry, hoveredProvince, mousePos, viewport]);
+  }), [mapLayer, camera.zoom, isZooming, showProvinces, showDetails, moveMode, setMoveMode, moveTargets, hoveredCountry, hoveredProvince, mousePos, viewport]);
 
   if (worldLoading) {
     return (
@@ -308,13 +327,33 @@ const WorldMap = () => {
   return (
     <MapProvider value={mapContextValue}>
       <div ref={containerRef} className="relative w-full h-full overflow-hidden select-none"
-        style={{ background: 'hsl(var(--map-water))' }}
+        style={{
+          background: 'hsl(var(--map-water))',
+          cursor: moveMode ? 'crosshair' : isPanning ? 'grabbing' : 'grab',
+        }}
         onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseLeave}>
         <div className="absolute inset-0 pointer-events-none z-10" style={{ background: 'radial-gradient(ellipse at center, transparent 50%, hsl(var(--background) / 0.4) 100%)' }} />
-        <MapRenderer camera={camera} isPanning={isPanning} moveMode={moveMode} />
+        <MapRenderer
+          camera={camera}
+          containerSize={containerSize}
+          provinces={state.provinces}
+          countries={state.countries}
+          armies={state.armies}
+          activeBattles={state.activeBattles}
+          playerCountryId={state.playerCountryId}
+          selectedCountryId={selectedCountryId}
+          selectedProvinceId={selectedProvinceId}
+          selectedArmyIds={selectedArmyIds}
+          hoveredProvinceId={hoveredProvince}
+          moveTargets={moveTargets}
+          mapLayer={mapLayer}
+          showProvinceBorders={camera.zoom >= 1.5}
+          showDetails={showDetails}
+        />
         <LabelLayer camera={camera} containerSize={containerSize} />
         <MapTooltipLayer isPanning={isPanning} />
         <MapControls zoom={camera.zoom} onZoomIn={() => zoomByStep(1.2)} onZoomOut={() => zoomByStep(1 / 1.2)} onResetView={resetView} />
+        <MiniMap camera={camera} onNavigate={handleMiniMapNavigate} />
         {selectionBox && (
           <div
             className="absolute border-2 border-primary bg-primary pointer-events-none"

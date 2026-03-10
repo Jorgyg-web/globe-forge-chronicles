@@ -3,6 +3,7 @@ import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 import { useGame } from '@/context/GameContext';
 import { useMapContext } from './MapContext';
 import { UNIT_STATS } from '@/data/unitStats';
+import { MAP_LAYER_OPTIONS } from './mapConstants';
 
 interface MapControlsProps {
   zoom: number;
@@ -13,7 +14,7 @@ interface MapControlsProps {
 
 const MapControls: React.FC<MapControlsProps> = ({ zoom, onZoomIn, onZoomOut, onResetView }) => {
   const { state, selectedArmyId } = useGame();
-  const { moveMode, setMoveMode } = useMapContext();
+  const { mapLayer, setMapLayer, moveMode, setMoveMode } = useMapContext();
 
   const selectedArmy = selectedArmyId ? state.armies[selectedArmyId] : null;
 
@@ -52,6 +53,26 @@ const MapControls: React.FC<MapControlsProps> = ({ zoom, onZoomIn, onZoomOut, on
 
       <div className="absolute bottom-3 left-3 z-20 flex items-center gap-2">
         <span className="text-[10px] font-mono text-muted-foreground bg-card/60 backdrop-blur-sm px-2 py-1 rounded-md border border-border/50">{(zoom * 100).toFixed(0)}%</span>
+      </div>
+
+      <div className="absolute top-3 left-3 z-20 rounded-lg border border-border/60 bg-card/85 p-1.5 backdrop-blur-sm">
+        <div className="mb-1 px-1 text-[9px] font-mono uppercase tracking-[0.2em] text-muted-foreground">Map Layer</div>
+        <div className="flex flex-wrap gap-1">
+          {MAP_LAYER_OPTIONS.map(layer => (
+            <button
+              key={layer.id}
+              type="button"
+              onClick={() => setMapLayer(layer.id)}
+              className={`rounded-md px-2 py-1 text-[10px] font-semibold transition-colors ${
+                mapLayer === layer.id
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-background/40 text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {layer.label}
+            </button>
+          ))}
+        </div>
       </div>
     </>
   );

@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useGame } from '@/context/GameContext';
 import { formatNumber } from '@/components/game/TopBar';
 import { getProvincesForCountry } from '@/data/provinces';
@@ -14,6 +13,8 @@ import {
   Plus, ChevronRight,
 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
+import { BuildingInstanceTooltipContent, BuildingTooltipContent, ProvinceTooltipContent, UnitTooltipContent } from '@/components/game/tooltips/GameTooltipContents';
+import { StrategyTooltip, StrategyTooltipContent, StrategyTooltipProvider, StrategyTooltipTrigger } from '@/components/game/tooltips/StrategyTooltip';
 
 const RESOURCE_ICONS: Record<keyof Resources, React.ReactNode> = {
   food: <Wheat size={10} />, steel: <Pickaxe size={10} />, oil: <Fuel size={10} />,
@@ -92,41 +93,48 @@ const ProvincePanel = () => {
         const queueCount = state.constructionQueue.filter(i => i.provinceId === prov.id).length
           + state.productionQueue.filter(i => i.provinceId === prov.id).length;
         return (
-          <button key={prov.id} onClick={() => setSelectedProvinceId(prov.id)}
-            className="w-full game-panel hover:border-primary/30 transition-all cursor-pointer text-left group">
-            <div className="px-3 py-2">
-              <div className="flex items-center justify-between mb-1">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-sm">{TERRAIN_ICONS[prov.terrain] || '🗺️'}</span>
-                  <span className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors truncate max-w-[140px]">{prov.name}</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  {queueCount > 0 && <span className="text-[9px] font-mono text-primary bg-primary/10 px-1 rounded">{queueCount}⚙</span>}
-                  <span className="text-[10px] font-mono text-muted-foreground">Dev {prov.development}</span>
-                </div>
-              </div>
-              <div className="grid grid-cols-4 gap-1 text-[10px]">
-                <span className="flex items-center gap-0.5 text-muted-foreground"><Users size={9} />{(prov.population / 1e6).toFixed(1)}M</span>
-                <span className="flex items-center gap-0.5 text-muted-foreground"><Shield size={9} />{prov.morale.toFixed(0)}%</span>
-                <span className="flex items-center gap-0.5 text-muted-foreground"><Building2 size={9} />{prov.buildings.length}</span>
-                {totalUnits > 0 && <span className="flex items-center gap-0.5 text-stat-positive"><Swords size={9} />{totalUnits}</span>}
-              </div>
-            </div>
-          </button>
+          <StrategyTooltipProvider key={prov.id}>
+            <StrategyTooltip>
+              <StrategyTooltipTrigger asChild>
+                <button onClick={() => setSelectedProvinceId(prov.id)}
+                  className="w-full game-panel hover:border-primary/30 transition-all cursor-pointer text-left group">
+                  <div className="px-3 py-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm">{TERRAIN_ICONS[prov.terrain] || '🗺️'}</span>
+                        <span className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors truncate max-w-[140px]">{prov.name}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        {queueCount > 0 && <span className="text-[9px] font-mono text-primary bg-primary/10 px-1 rounded">{queueCount}⚙</span>}
+                        <span className="text-[10px] font-mono text-muted-foreground">Dev {prov.development}</span>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-4 gap-1 text-[10px]">
+                      <span className="flex items-center gap-0.5 text-muted-foreground"><Users size={9} />{(prov.population / 1e6).toFixed(1)}M</span>
+                      <span className="flex items-center gap-0.5 text-muted-foreground"><Shield size={9} />{prov.morale.toFixed(0)}%</span>
+                      <span className="flex items-center gap-0.5 text-muted-foreground"><Building2 size={9} />{prov.buildings.length}</span>
+                      {totalUnits > 0 && <span className="flex items-center gap-0.5 text-stat-positive"><Swords size={9} />{totalUnits}</span>}
+                    </div>
+                  </div>
+                </button>
+              </StrategyTooltipTrigger>
+              <StrategyTooltipContent side="right" align="start">
+                <ProvinceTooltipContent province={prov} country={country} armyCount={armiesHere.length} />
+              </StrategyTooltipContent>
+            </StrategyTooltip>
+          </StrategyTooltipProvider>
         );
       })}
     </div>
   );
 };
 
-type DetailTab = 'overview' | 'build' | 'recruit';
-
 const ProvinceDetail = ({ province, isPlayer, dispatch, onBack, state }: {
   province: Province; isPlayer: boolean;
   dispatch: ReturnType<typeof useGame>['dispatch']; onBack: () => void;
   state: ReturnType<typeof useGame>['state'];
 }) => {
-  const [tab, setTab] = useState<DetailTab>('overview');
+  const { provincePanelTab, setProvincePanelTab } = useGame();
   const playerCountry = state.countries[state.playerCountryId];
   const queueItems = state.constructionQueue.filter(i => i.provinceId === province.id);
   const prodItems = state.productionQueue.filter(i => i.provinceId === province.id);
@@ -153,13 +161,13 @@ const ProvinceDetail = ({ province, isPlayer, dispatch, onBack, state }: {
       {/* Tabs */}
       {isPlayer && (
         <div className="flex border-b border-border/40 px-3">
-          {(['overview', 'build', 'recruit'] as DetailTab[]).map(t => (
-            <button key={t} onClick={() => setTab(t)}
+          {(['overview', 'build', 'recruit'] as const).map(t => (
+            <button key={t} onClick={() => setProvincePanelTab(t)}
               className={`px-3 py-2 text-[10px] font-mono uppercase tracking-wider transition-colors relative ${
-                tab === t ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+                provincePanelTab === t ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
               }`}>
               {t === 'overview' ? 'Overview' : t === 'build' ? 'Build' : 'Recruit'}
-              {tab === t && <span className="absolute bottom-0 left-1 right-1 h-[2px] bg-primary rounded-full" />}
+              {provincePanelTab === t && <span className="absolute bottom-0 left-1 right-1 h-[2px] bg-primary rounded-full" />}
               {t === 'build' && queueItems.length > 0 && (
                 <span className="ml-1 text-[8px] bg-primary/20 text-primary px-1 rounded">{queueItems.length}</span>
               )}
@@ -173,9 +181,9 @@ const ProvinceDetail = ({ province, isPlayer, dispatch, onBack, state }: {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto scrollbar-thin p-3 space-y-3">
-        {tab === 'overview' && <OverviewTab province={province} state={state} isPlayer={isPlayer} />}
-        {tab === 'build' && <BuildTab province={province} playerCountry={playerCountry} dispatch={dispatch} queueItems={queueItems} state={state} />}
-        {tab === 'recruit' && <RecruitTab province={province} playerCountry={playerCountry} dispatch={dispatch} prodItems={prodItems} state={state} />}
+        {provincePanelTab === 'overview' && <OverviewTab province={province} state={state} isPlayer={isPlayer} />}
+        {provincePanelTab === 'build' && <BuildTab province={province} playerCountry={playerCountry} dispatch={dispatch} queueItems={queueItems} state={state} />}
+        {provincePanelTab === 'recruit' && <RecruitTab province={province} playerCountry={playerCountry} dispatch={dispatch} prodItems={prodItems} state={state} />}
       </div>
     </div>
   );
@@ -218,18 +226,27 @@ const OverviewTab = ({ province, state, isPlayer }: { province: Province; state:
             const catMeta = CATEGORY_META[info.category];
 
             return (
-              <div key={b.type} className="rounded bg-muted/20 overflow-hidden">
-                <div className="flex items-center gap-2 py-1 px-2">
-                  <span className={catMeta.color}>{BUILDING_ICONS[b.type]}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] font-semibold text-foreground">{info.name}</span>
-                      <span className="text-[9px] font-mono text-muted-foreground">Lv.{b.level}/{info.maxLevel}</span>
+              <StrategyTooltipProvider key={b.type}>
+                <StrategyTooltip>
+                  <StrategyTooltipTrigger asChild>
+                    <div className="rounded bg-muted/20 overflow-hidden cursor-help">
+                      <div className="flex items-center gap-2 py-1 px-2">
+                        <span className={catMeta.color}>{BUILDING_ICONS[b.type]}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] font-semibold text-foreground">{info.name}</span>
+                            <span className="text-[9px] font-mono text-muted-foreground">Lv.{b.level}/{info.maxLevel}</span>
+                          </div>
+                          <span className="text-[9px] text-muted-foreground">{BUILDING_EFFECTS[b.type](b.level)}</span>
+                        </div>
+                      </div>
                     </div>
-                    <span className="text-[9px] text-muted-foreground">{BUILDING_EFFECTS[b.type](b.level)}</span>
-                  </div>
-                </div>
-              </div>
+                  </StrategyTooltipTrigger>
+                  <StrategyTooltipContent side="right" align="start">
+                    <BuildingInstanceTooltipContent building={b} />
+                  </StrategyTooltipContent>
+                </StrategyTooltip>
+              </StrategyTooltipProvider>
             );
           })}
         </div>
@@ -312,53 +329,63 @@ const BuildTab = ({ province, playerCountry, dispatch, queueItems, state }: {
                 if (type === 'navalBase' && !province.isCoastal) return null;
 
                 return (
-                  <button key={type}
-                    disabled={!affordable || alreadyQueued}
-                    onClick={() => dispatch({ type: 'BUILD_IN_PROVINCE', provinceId: province.id, buildingType: type })}
-                    className={`w-full text-left rounded-md border transition-all px-3 py-2 ${
-                      alreadyQueued
-                        ? 'border-primary/20 bg-primary/5 opacity-60 cursor-not-allowed'
-                        : affordable
-                          ? 'border-border/50 hover:border-primary/40 bg-card/50 hover:bg-primary/5 cursor-pointer'
-                          : 'border-border/30 bg-card/30 opacity-50 cursor-not-allowed'
-                    }`}>
-                    <div className="flex items-center gap-2">
-                      <span className={`${catMeta.color} shrink-0`}>{BUILDING_ICONS[type]}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-[11px] font-semibold text-foreground">{info.name}</span>
-                          {currentLevel > 0 && (
-                            <span className="text-[9px] font-mono text-muted-foreground">Lv.{currentLevel} → {nextLevel}</span>
-                          )}
-                          {currentLevel === 0 && (
-                            <span className="text-[9px] font-mono text-primary">NEW</span>
-                          )}
+                  <StrategyTooltipProvider key={type}>
+                    <StrategyTooltip>
+                      <StrategyTooltipTrigger asChild>
+                        <div className="w-full">
+                          <button
+                            disabled={!affordable || alreadyQueued}
+                            onClick={() => dispatch({ type: 'BUILD_IN_PROVINCE', provinceId: province.id, buildingType: type })}
+                            className={`w-full text-left rounded-md border transition-all px-3 py-2 ${
+                              alreadyQueued
+                                ? 'border-primary/20 bg-primary/5 opacity-60 cursor-not-allowed'
+                                : affordable
+                                  ? 'border-border/50 hover:border-primary/40 bg-card/50 hover:bg-primary/5 cursor-pointer'
+                                  : 'border-border/30 bg-card/30 opacity-50 cursor-not-allowed'
+                            }`}>
+                            <div className="flex items-center gap-2">
+                              <span className={`${catMeta.color} shrink-0`}>{BUILDING_ICONS[type]}</span>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-[11px] font-semibold text-foreground">{info.name}</span>
+                                  {currentLevel > 0 && (
+                                    <span className="text-[9px] font-mono text-muted-foreground">Lv.{currentLevel} → {nextLevel}</span>
+                                  )}
+                                  {currentLevel === 0 && (
+                                    <span className="text-[9px] font-mono text-primary">NEW</span>
+                                  )}
+                                </div>
+                                <p className="text-[9px] text-muted-foreground mt-0.5">{info.description}</p>
+                                <p className="text-[8px] text-muted-foreground/70 mt-0.5 italic">
+                                  {BUILDING_EFFECTS[type](nextLevel)}
+                                </p>
+                              </div>
+                              <div className="text-right shrink-0">
+                                <span className="text-[9px] font-mono text-muted-foreground flex items-center gap-0.5 justify-end">
+                                  <Clock size={8} />{buildTime}t
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                              {RESOURCE_KEYS.filter(k => cost[k] > 0).map(k => (
+                                <span key={k} className={`text-[9px] font-mono flex items-center gap-0.5 ${
+                                  playerCountry.resources[k] >= cost[k] ? 'text-muted-foreground' : 'text-destructive'
+                                }`}>
+                                  {RESOURCE_ICONS[k]}{cost[k]}
+                                </span>
+                              ))}
+                            </div>
+                            {alreadyQueued && (
+                              <span className="text-[9px] text-primary font-mono mt-1 block">⚙ In queue</span>
+                            )}
+                          </button>
                         </div>
-                        <p className="text-[9px] text-muted-foreground mt-0.5">{info.description}</p>
-                        <p className="text-[8px] text-muted-foreground/70 mt-0.5 italic">
-                          {BUILDING_EFFECTS[type](nextLevel)}
-                        </p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <span className="text-[9px] font-mono text-muted-foreground flex items-center gap-0.5 justify-end">
-                          <Clock size={8} />{buildTime}t
-                        </span>
-                      </div>
-                    </div>
-                    {/* Cost row */}
-                    <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                      {RESOURCE_KEYS.filter(k => cost[k] > 0).map(k => (
-                        <span key={k} className={`text-[9px] font-mono flex items-center gap-0.5 ${
-                          playerCountry.resources[k] >= cost[k] ? 'text-muted-foreground' : 'text-destructive'
-                        }`}>
-                          {RESOURCE_ICONS[k]}{cost[k]}
-                        </span>
-                      ))}
-                    </div>
-                    {alreadyQueued && (
-                      <span className="text-[9px] text-primary font-mono mt-1 block">⚙ In queue</span>
-                    )}
-                  </button>
+                      </StrategyTooltipTrigger>
+                      <StrategyTooltipContent side="right" align="start">
+                        <BuildingTooltipContent buildingType={type} level={currentLevel} nextLevel={nextLevel} />
+                      </StrategyTooltipContent>
+                    </StrategyTooltip>
+                  </StrategyTooltipProvider>
                 );
               })}
             </div>
@@ -422,46 +449,56 @@ const RecruitTab = ({ province, playerCountry, dispatch, prodItems, state }: {
           {availableUnits.map(([unitType, stats]) => {
             const affordable = canAfford(playerCountry.resources, stats.cost);
             return (
-              <button key={unitType}
-                disabled={!affordable}
-                onClick={() => dispatch({ type: 'PRODUCE_UNITS', provinceId: province.id, unitType, quantity: 1 })}
-                className={`w-full text-left rounded-md border transition-all px-3 py-2 ${
-                  affordable
-                    ? 'border-border/50 hover:border-primary/40 bg-card/50 hover:bg-primary/5 cursor-pointer'
-                    : 'border-border/30 bg-card/30 opacity-50 cursor-not-allowed'
-                }`}>
-                <div className="flex items-center gap-2">
-                  <span className="text-lg shrink-0">{stats.icon}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] font-semibold text-foreground">{stats.name}</span>
-                      <span className="text-[9px] font-mono text-muted-foreground">{stats.armorClass}</span>
+              <StrategyTooltipProvider key={unitType}>
+                <StrategyTooltip>
+                  <StrategyTooltipTrigger asChild>
+                    <div className="w-full">
+                      <button
+                        disabled={!affordable}
+                        onClick={() => dispatch({ type: 'PRODUCE_UNITS', provinceId: province.id, unitType, quantity: 1 })}
+                        className={`w-full text-left rounded-md border transition-all px-3 py-2 ${
+                          affordable
+                            ? 'border-border/50 hover:border-primary/40 bg-card/50 hover:bg-primary/5 cursor-pointer'
+                            : 'border-border/30 bg-card/30 opacity-50 cursor-not-allowed'
+                        }`}>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg shrink-0">{stats.icon}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-[11px] font-semibold text-foreground">{stats.name}</span>
+                              <span className="text-[9px] font-mono text-muted-foreground">{stats.armorClass}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-[9px] text-muted-foreground mt-0.5">
+                              <span>⚔{stats.attack}</span>
+                              <span>🛡{stats.defense}</span>
+                              <span>❤{stats.health}</span>
+                              <span>🏃{stats.speed}</span>
+                              {stats.range > 0 && <span>📏{stats.range}</span>}
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <span className="text-[9px] font-mono text-muted-foreground flex items-center gap-0.5 justify-end">
+                              <Clock size={8} />{stats.buildTime}t
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+                          {RESOURCE_KEYS.filter(k => stats.cost[k] > 0).map(k => (
+                            <span key={k} className={`text-[9px] font-mono flex items-center gap-0.5 ${
+                              playerCountry.resources[k] >= stats.cost[k] ? 'text-muted-foreground' : 'text-destructive'
+                            }`}>
+                              {RESOURCE_ICONS[k]}{stats.cost[k]}
+                            </span>
+                          ))}
+                        </div>
+                      </button>
                     </div>
-                    <div className="flex items-center gap-2 text-[9px] text-muted-foreground mt-0.5">
-                      <span>⚔{stats.attack}</span>
-                      <span>🛡{stats.defense}</span>
-                      <span>❤{stats.health}</span>
-                      <span>🏃{stats.speed}</span>
-                      {stats.range > 0 && <span>📏{stats.range}</span>}
-                    </div>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <span className="text-[9px] font-mono text-muted-foreground flex items-center gap-0.5 justify-end">
-                      <Clock size={8} />{stats.buildTime}t
-                    </span>
-                  </div>
-                </div>
-                {/* Cost row */}
-                <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                  {RESOURCE_KEYS.filter(k => stats.cost[k] > 0).map(k => (
-                    <span key={k} className={`text-[9px] font-mono flex items-center gap-0.5 ${
-                      playerCountry.resources[k] >= stats.cost[k] ? 'text-muted-foreground' : 'text-destructive'
-                    }`}>
-                      {RESOURCE_ICONS[k]}{stats.cost[k]}
-                    </span>
-                  ))}
-                </div>
-              </button>
+                  </StrategyTooltipTrigger>
+                  <StrategyTooltipContent side="right" align="start">
+                    <UnitTooltipContent unitType={unitType} />
+                  </StrategyTooltipContent>
+                </StrategyTooltip>
+              </StrategyTooltipProvider>
             );
           })}
         </div>

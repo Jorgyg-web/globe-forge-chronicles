@@ -34,9 +34,11 @@ function getDominantUnitIcon(army: Army): string {
 
 const ArmyLayer: React.FC = () => {
   const { state, selectedArmyId, selectedArmyIds, toggleArmySelection, setActivePanel } = useGame();
-  const { zoom, isZooming, viewport } = useMapContext();
-  const showArmies = zoom > 3;
-  const showMovement = zoom > 3;
+  const { mapLayer, zoom, isZooming, viewport } = useMapContext();
+  const militaryLayer = mapLayer === 'military';
+  const showArmies = militaryLayer ? zoom > 1.8 : zoom > 3;
+  const showMovement = militaryLayer ? zoom > 1.8 : zoom > 3;
+  const badgeScale = militaryLayer ? 1.18 : 1;
 
   const armyPositions = useMemo(() => {
     const positions: { army: Army; x: number; y: number; targetX?: number; targetY?: number }[] = [];
@@ -90,9 +92,9 @@ const ArmyLayer: React.FC = () => {
             {/* Path line with animation */}
             <line x1={x} y1={y} x2={targetX} y2={targetY}
               stroke={isPlayer ? 'hsl(42, 100%, 58%)' : 'hsl(0, 72%, 51%)'}
-              strokeWidth={isSelected ? 2 : 1.3} 
+              strokeWidth={militaryLayer ? (isSelected ? 2.4 : 1.8) : isSelected ? 2 : 1.3} 
               strokeDasharray="5,3" 
-              opacity={0.7}
+              opacity={militaryLayer ? 0.9 : 0.7}
               markerEnd={isPlayer ? 'url(#arrowhead)' : 'url(#arrowheadRed)'}>
               <animate
                 attributeName="strokeDashoffset"
@@ -112,17 +114,17 @@ const ArmyLayer: React.FC = () => {
             </text>
 
             {/* Moving army marker */}
-            {isSelected && <circle cx={cx} cy={cy} r={7} fill="none" stroke="hsl(var(--primary))" strokeWidth={0.6} opacity={0.4} filter="url(#glow)" />}
-            <rect x={cx - 6} y={cy - 5} width={12} height={8} rx={2}
+            {isSelected && <circle cx={cx} cy={cy} r={militaryLayer ? 8.5 : 7} fill="none" stroke="hsl(var(--primary))" strokeWidth={0.6} opacity={0.4} filter="url(#glow)" />}
+            <rect x={cx - 6 * badgeScale} y={cy - 5 * badgeScale} width={12 * badgeScale} height={8 * badgeScale} rx={2}
               fill={isPlayer ? 'hsl(var(--primary))' : state.countries[army.countryId]?.color ?? '#888'}
               stroke="hsl(var(--foreground))" strokeWidth={0.4} opacity={0.95}>
               <animate attributeName="opacity" values="0.95;0.75;0.95" dur="1.5s" repeatCount="indefinite" />
             </rect>
-            <text x={cx - 2} y={cy + 0.5} textAnchor="middle" dominantBaseline="middle" fontSize={4}
+            <text x={cx - 2.2 * badgeScale} y={cy + 0.5} textAnchor="middle" dominantBaseline="middle" fontSize={militaryLayer ? 4.8 : 4}
               style={{ pointerEvents: 'none' }}>
               {icon}
             </text>
-            <text x={cx + 3} y={cy + 0.5} textAnchor="middle" dominantBaseline="middle" fontSize={3}
+            <text x={cx + 3.1 * badgeScale} y={cy + 0.5} textAnchor="middle" dominantBaseline="middle" fontSize={militaryLayer ? 3.4 : 3}
               fill={isPlayer ? 'hsl(var(--primary-foreground))' : 'hsl(var(--foreground))'} fontFamily="'JetBrains Mono', monospace" fontWeight={700}
               style={{ pointerEvents: 'none' }}>
               {totalUnits > 99 ? '99+' : totalUnits}
@@ -145,10 +147,10 @@ const ArmyLayer: React.FC = () => {
             {/* Selection glow */}
             {isSelected && (
               <>
-                <circle cx={x} cy={y - 3} r={8} fill="none" stroke="hsl(var(--primary))" strokeWidth={0.8} opacity={0.5} filter="url(#glow)">
-                  <animate attributeName="r" values="8;9.5;8" dur="1.5s" repeatCount="indefinite" />
+                <circle cx={x} cy={y - 3} r={militaryLayer ? 10 : 8} fill="none" stroke="hsl(var(--primary))" strokeWidth={0.8} opacity={0.5} filter="url(#glow)">
+                  <animate attributeName="r" values={militaryLayer ? '10;12;10' : '8;9.5;8'} dur="1.5s" repeatCount="indefinite" />
                 </circle>
-                <circle cx={x} cy={y - 3} r={10} fill="none" stroke="hsl(var(--primary))" strokeWidth={0.3} opacity={0.2} />
+                <circle cx={x} cy={y - 3} r={militaryLayer ? 12 : 10} fill="none" stroke="hsl(var(--primary))" strokeWidth={0.3} opacity={0.2} />
               </>
             )}
 
@@ -157,31 +159,31 @@ const ArmyLayer: React.FC = () => {
               <circle
                 cx={x}
                 cy={y - 3}
-                r={9}
+                r={militaryLayer ? 11 : 9}
                 fill="hsl(var(--primary))"
                 opacity={0.15}
                 filter="url(#glow)"
               />
             )}
-            <rect x={x - 7} y={y - 8} width={14} height={9} rx={2}
+            <rect x={x - 7 * badgeScale} y={y - 8 * badgeScale} width={14 * badgeScale} height={9 * badgeScale} rx={2}
               fill={isPlayer ? 'hsl(var(--primary))' : countryColor}
               stroke={isSelected ? 'hsl(var(--foreground))' : 'hsl(var(--background))'} strokeWidth={isSelected ? 1 : 0.4} opacity={0.95} />
 
             {/* Icon + count */}
-            <text x={x - 2.5} y={y - 3} textAnchor="middle" dominantBaseline="middle" fontSize={4.5}
+            <text x={x - 2.7 * badgeScale} y={y - 3} textAnchor="middle" dominantBaseline="middle" fontSize={militaryLayer ? 5.2 : 4.5}
               style={{ pointerEvents: 'none' }}>
               {icon}
             </text>
-            <text x={x + 3.5} y={y - 3} textAnchor="middle" dominantBaseline="middle" fontSize={3.5}
+            <text x={x + 3.7 * badgeScale} y={y - 3} textAnchor="middle" dominantBaseline="middle" fontSize={militaryLayer ? 4 : 3.5}
               fill={isPlayer ? 'hsl(var(--primary-foreground))' : 'hsl(var(--foreground))'} fontFamily="'JetBrains Mono', monospace" fontWeight={700}
               style={{ pointerEvents: 'none' }}>
               {totalUnits > 99 ? '99+' : totalUnits}
             </text>
 
             {/* Health bar under the badge */}
-            <rect x={x - 6} y={y + 1.5} width={12} height={1.2} rx={0.6}
+            <rect x={x - 6 * badgeScale} y={y + 1.5 * badgeScale} width={12 * badgeScale} height={1.2 * badgeScale} rx={0.6}
               fill="hsl(0, 0%, 15%)" opacity={0.6} />
-            <rect x={x - 6} y={y + 1.5} width={12 * (avgHealth / 100)} height={1.2} rx={0.6}
+            <rect x={x - 6 * badgeScale} y={y + 1.5 * badgeScale} width={12 * badgeScale * (avgHealth / 100)} height={1.2 * badgeScale} rx={0.6}
               fill={avgHealth > 60 ? 'hsl(var(--success))' : avgHealth > 30 ? 'hsl(var(--warning))' : 'hsl(var(--danger))'}
               opacity={0.9} />
           </g>

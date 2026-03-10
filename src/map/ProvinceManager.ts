@@ -41,9 +41,9 @@ export interface ProvinceHighlightConfig {
 
 // ─── Constants ──────────────────────────────────────────────────────
 
-/** Province map resolution. 2× the SVG world coordinate system for good detail. */
-export const PROV_MAP_WIDTH = MAP_WORLD_WIDTH * 2;   // 1600
-export const PROV_MAP_HEIGHT = MAP_WORLD_HEIGHT * 2;  // 900
+/** Province map resolution. 4× the SVG world coordinate system for reliable small-province selection. */
+export const PROV_MAP_WIDTH = MAP_WORLD_WIDTH * 4;   // 3200
+export const PROV_MAP_HEIGHT = MAP_WORLD_HEIGHT * 4;  // 1800
 
 /** Scale factor from SVG world coords → province map pixel coords */
 export const PROV_SCALE_X = PROV_MAP_WIDTH / MAP_WORLD_WIDTH;
@@ -208,6 +208,31 @@ export class ProvinceManager {
     const px = Math.floor(worldX * PROV_SCALE_X);
     const py = Math.floor(worldY * PROV_SCALE_Y);
 
+    if (px < 0 || px >= PROV_MAP_WIDTH || py < 0 || py >= PROV_MAP_HEIGHT) return null;
+
+    const directHit = this.lookupProvinceAtPixel(px, py);
+    if (directHit) return directHit;
+
+    // Small provinces can become only a handful of pixels wide even when visible.
+    // Search a tight neighborhood and prefer the nearest valid province pixel.
+    const fallbackRadius = 6;
+    for (let radius = 1; radius <= fallbackRadius; radius++) {
+      for (let dy = -radius; dy <= radius; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== radius) continue;
+          const candidate = this.lookupProvinceAtPixel(px + dx, py + dy);
+          if (candidate) {
+            return candidate;
+          }
+        }
+      }
+    }
+
+    return null;
+  }
+
+  private lookupProvinceAtPixel(px: number, py: number): string | null {
+    if (!this._pixelData) return null;
     if (px < 0 || px >= PROV_MAP_WIDTH || py < 0 || py >= PROV_MAP_HEIGHT) return null;
 
     const idx = (py * PROV_MAP_WIDTH + px) * 4;

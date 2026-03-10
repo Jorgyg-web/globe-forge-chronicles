@@ -5,6 +5,7 @@ interface ProvinceOverlayLayerProps {
   provinces: CachedProvinceData[];
   selectedProvinceId: string | null;
   selectedCountryId: string | null;
+  hoveredProvinceId: string | null;
   moveTargets: Set<string>;
   zoom: number;
   troopCounts: Record<string, number>;
@@ -14,16 +15,37 @@ const ZOOM_PROVINCE_BORDERS = 1.5
 const ZOOM_DETAILS = 3          // close: show stats, morale bars, building counts
 
 export const ProvinceOverlayLayer: React.FC<ProvinceOverlayLayerProps> = React.memo(({
-  provinces, selectedProvinceId, selectedCountryId, moveTargets, zoom, troopCounts,
+  provinces, selectedProvinceId, selectedCountryId, hoveredProvinceId, moveTargets, zoom, troopCounts,
 }) => {
   const showProvinceBorders = zoom >= ZOOM_PROVINCE_BORDERS;
   const showDetails = zoom >= ZOOM_DETAILS;
+  const hoverProvinceStrokeWidth = Math.max(0.32, 1.45 - zoom * 0.1);
   const selectedCountryStrokeWidth = Math.max(0.18, 0.7 - zoom * 0.08);
   const moveTargetStrokeWidth = Math.max(0.28, 1.1 - zoom * 0.1);
   const selectedProvinceStrokeWidth = Math.max(0.35, 1.35 - zoom * 0.12);
 
   return (
     <g style={{ pointerEvents: 'none' }}>
+      {/* Hovered province border highlight */}
+      {hoveredProvinceId && hoveredProvinceId !== selectedProvinceId && (() => {
+        const province = provinces.find(p => p.id === hoveredProvinceId);
+        if (!province) return null;
+
+        return (
+          <path
+            d={province.geometry}
+            fill="none"
+            stroke="hsl(var(--warning))"
+            strokeWidth={hoverProvinceStrokeWidth}
+            opacity={0.95}
+            vectorEffect="non-scaling-stroke"
+            strokeLinejoin="round"
+            strokeLinecap="round"
+            filter="url(#glow)"
+          />
+        );
+      })()}
+
       {/* Selected country border highlight */}
       {selectedCountryId && provinces
         .filter(p => p.countryId === selectedCountryId && p.id !== selectedProvinceId)

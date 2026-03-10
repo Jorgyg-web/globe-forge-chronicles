@@ -1,6 +1,6 @@
 // Game state context and provider
 import React, { createContext, useContext, useReducer, useCallback, useEffect, useRef, useState } from 'react';
-import { GameState, GameAction, CountryId, ProvinceId, ArmyId } from '@/types/game';
+import { GameState, GameAction, CountryId, ProvinceId, ArmyId, BuildingType } from '@/types/game';
 import { processAction } from '@/engine/GameEngine';
 import { hashStringToSeed, randomIntFromKey } from '@/lib/deterministicRandom';
 import { generateWorld, setCachedWorldData } from '@/map/worldGenerator';
@@ -15,6 +15,10 @@ interface GameContextType {
   setSelectedProvinceId: (id: ProvinceId | null) => void;
   selectedArmyId: ArmyId | null;
   setSelectedArmyId: (id: ArmyId | null) => void;
+  selectedBuilding: SelectedBuildingRef | null;
+  setSelectedBuilding: (building: SelectedBuildingRef | null) => void;
+  provincePanelTab: ProvincePanelTab;
+  setProvincePanelTab: (tab: ProvincePanelTab) => void;
   selectedArmyIds: ArmyId[];
   toggleArmySelection: (id: ArmyId, shiftHeld?: boolean) => void;
   setSelectedArmyIds: (ids: ArmyId[]) => void;
@@ -23,7 +27,14 @@ interface GameContextType {
   worldLoading: boolean;
 }
 
-export type PanelType = 'overview' | 'economy' | 'military' | 'diplomacy' | 'technology' | 'province' | 'construction' | 'production';
+export interface SelectedBuildingRef {
+  provinceId: ProvinceId;
+  buildingType: BuildingType;
+}
+
+export type ProvincePanelTab = 'overview' | 'build' | 'recruit';
+
+export type PanelType = 'overview' | 'economy' | 'military' | 'diplomacy' | 'technology' | 'province' | 'construction' | 'production' | 'info';
 
 const GameContext = createContext<GameContextType | null>(null);
 
@@ -74,6 +85,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const [selectedCountryId, setSelectedCountryId] = React.useState<CountryId | null>('usa');
   const [selectedProvinceId, setSelectedProvinceId] = React.useState<ProvinceId | null>(null);
   const [selectedArmyId, setSelectedArmyId] = React.useState<ArmyId | null>(null);
+  const [selectedBuilding, setSelectedBuilding] = React.useState<SelectedBuildingRef | null>(null);
+  const [provincePanelTab, setProvincePanelTab] = React.useState<ProvincePanelTab>('overview');
   const [selectedArmyIds, setSelectedArmyIds] = React.useState<ArmyId[]>([]);
   const [activePanel, setActivePanel] = React.useState<PanelType>('overview');
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -227,6 +240,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       selectedCountryId, setSelectedCountryId,
       selectedProvinceId, setSelectedProvinceId,
       selectedArmyId, setSelectedArmyId,
+      selectedBuilding, setSelectedBuilding,
+      provincePanelTab, setProvincePanelTab,
       selectedArmyIds, toggleArmySelection, setSelectedArmyIds,
       activePanel, setActivePanel,
       worldLoading,

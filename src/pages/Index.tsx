@@ -1,5 +1,6 @@
 import { GameProvider, useGame } from '@/context/GameContext';
 import TopBar from '@/components/game/TopBar';
+import AlertsBar from '@/components/game/AlertsBar';
 import SideNav from '@/components/game/SideNav';
 import WorldMap from '@/components/game/WorldMap';
 import OverviewPanel from '@/components/game/OverviewPanel';
@@ -10,7 +11,9 @@ import TechnologyPanel from '@/components/game/TechnologyPanel';
 import ProvincePanel from '@/components/game/ProvincePanel';
 import ConstructionPanel from '@/components/game/ConstructionPanel';
 import ProductionPanel from '@/components/game/ProductionPanel';
-import EventLog from '@/components/game/EventLog';
+import InfoPanel from '@/components/game/InfoPanel';
+import NewsFeed from '@/components/game/NewsFeed';
+import WorldNotifications from '@/components/game/WorldNotifications';
 import { useMemo } from 'react';
 
 const GameContent = () => {
@@ -26,12 +29,15 @@ const GameContent = () => {
       case 'technology': return <TechnologyPanel />;
       case 'construction': return <ConstructionPanel />;
       case 'production': return <ProductionPanel />;
+      case 'info': return <InfoPanel />;
     }
   }, [activePanel]);
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-background">
+      <WorldNotifications />
       <TopBar />
+      <AlertsBar />
       <div className="flex flex-1 overflow-hidden">
         <SideNav />
         <div className="w-[340px] border-r border-panel overflow-hidden flex flex-col shrink-0 bg-card">
@@ -44,7 +50,7 @@ const GameContent = () => {
             <WorldMap />
           </div>
           <div className="h-[180px] shrink-0">
-            <EventLog />
+            <NewsFeed />
           </div>
         </div>
       </div>

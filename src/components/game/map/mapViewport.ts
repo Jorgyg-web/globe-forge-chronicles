@@ -106,8 +106,8 @@ export function clampZoom(zoom: number): number {
 }
 
 /**
- * Clamp the camera center so that at least 25% of the viewport overlaps
- * the map area (0–800 × 0–450).
+ * Clamp the camera center so that a majority of the viewport still overlaps
+ * the map area (0–800 × 0–450), avoiding visible edge drift while panning.
  */
 export function clampCenter(
   centerX: number,
@@ -116,12 +116,23 @@ export function clampCenter(
 ): { centerX: number; centerY: number } {
   const halfW = MAP_WORLD_WIDTH / (2 * zoom);
   const halfH = MAP_WORLD_HEIGHT / (2 * zoom);
-  // Allow 75% of the viewport to extend beyond the map edges.
-  const marginX = halfW * 1.5;
-  const marginY = halfH * 1.5;
+
+  const minCenterX = halfW;
+  const maxCenterX = MAP_WORLD_WIDTH - halfW;
+  const minCenterY = halfH;
+  const maxCenterY = MAP_WORLD_HEIGHT - halfH;
+
+  const clampedCenterX = minCenterX > maxCenterX
+    ? MAP_WORLD_WIDTH / 2
+    : Math.max(minCenterX, Math.min(maxCenterX, centerX));
+
+  const clampedCenterY = minCenterY > maxCenterY
+    ? MAP_WORLD_HEIGHT / 2
+    : Math.max(minCenterY, Math.min(maxCenterY, centerY));
+
   return {
-    centerX: Math.max(-marginX + halfW, Math.min(MAP_WORLD_WIDTH + marginX - halfW, centerX)),
-    centerY: Math.max(-marginY + halfH, Math.min(MAP_WORLD_HEIGHT + marginY - halfH, centerY)),
+    centerX: clampedCenterX,
+    centerY: clampedCenterY,
   };
 }
 

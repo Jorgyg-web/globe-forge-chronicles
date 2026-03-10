@@ -1,5 +1,7 @@
 import React from 'react';
 
+import { TooltipHeader, TooltipPanel, TooltipRow, TooltipSection } from '@/components/game/tooltips/TooltipLayout';
+
 export interface ResourceBreakdownLine {
   label: string;
   value: number;
@@ -28,39 +30,24 @@ export const ResourceTooltip: React.FC<ResourceTooltipProps> = ({ data, formatVa
   const expenseTotal = sumLines(data.expenses);
 
   return (
-    <div className="min-w-[260px] space-y-3">
-      <div className="border-b border-border/40 pb-2">
-        <div className="flex items-center justify-between gap-4">
-          <span className="text-sm font-semibold text-foreground">{data.label}</span>
-          <span className="text-sm font-mono font-bold text-foreground">{formatValue(data.currentValue)}</span>
-        </div>
-        <div className={`mt-1 text-xs font-mono ${data.changePerTurn >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-          {formatDelta(data.changePerTurn)} / turno
-        </div>
-      </div>
+    <TooltipPanel>
+      <TooltipHeader
+        title={data.label}
+        subtitle={<span className={`font-mono ${data.changePerTurn >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>{formatDelta(data.changePerTurn)} / turn</span>}
+        value={formatValue(data.currentValue)}
+      />
 
       <div className="space-y-2">
         <Section title="Income sources" lines={data.incomeSources} formatValue={formatValue} positive />
         <Section title="Expenses" lines={data.expenses} formatValue={formatValue} />
       </div>
 
-      <div className="border-t border-border/40 pt-2">
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-muted-foreground">Income</span>
-          <span className="font-mono text-emerald-400">+{formatValue(incomeTotal)}</span>
-        </div>
-        <div className="mt-1 flex items-center justify-between text-xs">
-          <span className="text-muted-foreground">Expenses</span>
-          <span className="font-mono text-rose-400">-{formatValue(expenseTotal)}</span>
-        </div>
-        <div className="mt-2 flex items-center justify-between text-sm font-semibold">
-          <span className="text-foreground">Net balance</span>
-          <span className={`font-mono ${data.changePerTurn >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-            {formatDelta(data.changePerTurn)}
-          </span>
-        </div>
-      </div>
-    </div>
+      <TooltipSection title="Balance summary">
+        <TooltipRow label="Income" value={`+${formatValue(incomeTotal)}`} valueClassName="text-emerald-400" />
+        <TooltipRow label="Expenses" value={`-${formatValue(expenseTotal)}`} valueClassName="text-rose-400" />
+        <TooltipRow label="Net balance" value={formatDelta(data.changePerTurn)} valueClassName={data.changePerTurn >= 0 ? 'text-emerald-400' : 'text-rose-400'} />
+      </TooltipSection>
+    </TooltipPanel>
   );
 };
 

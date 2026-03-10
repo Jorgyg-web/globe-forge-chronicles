@@ -96,7 +96,9 @@ export const ProvinceTooltipContent = ({
     </TooltipSection>
 
     <TooltipSection title="Province status">
-      <TooltipRow label="Owner" value={country?.code ?? '??'} />
+      <TooltipRow label="Owner country" value={country?.name ?? province.countryId} />
+      <TooltipRow label="Terrain" value={province.terrain} />
+      <TooltipRow label="Population" value={formatCompact(province.population)} />
       <TooltipRow label="Buildings" value={province.buildings.length} />
       <TooltipRow label="Armies present" value={armyCount} />
       <TooltipRow label="Adjacent provinces" value={province.adjacentProvinces.length} />

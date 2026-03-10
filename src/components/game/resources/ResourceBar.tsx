@@ -9,7 +9,7 @@ interface ResourceBarProps {
 
 export const ResourceBar: React.FC<ResourceBarProps> = ({ items, formatValue, formatDelta }) => {
   return (
-    <div className="flex flex-1 flex-wrap items-stretch gap-2 xl:flex-nowrap">
+    <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto whitespace-nowrap scrollbar-thin">
       {items.map(item => (
         <ResourceItem key={item.key} item={item} formatValue={formatValue} formatDelta={formatDelta} />
       ))}

@@ -12,7 +12,7 @@ const ZOOM_PROVINCE_BORDERS = 1.5;
 
 const ProvinceLayer: React.FC = () => {
   const { state, selectedCountryId, selectedProvinceId } = useGame();
-  const { zoom, isZooming, moveTargets, showProvinces, viewport } = useMapContext();
+  const { mapLayer, zoom, isZooming, moveTargets, hoveredProvince, showProvinces, viewport } = useMapContext();
 
   const showProvinceBorders = zoom >= ZOOM_PROVINCE_BORDERS
 
@@ -31,8 +31,10 @@ const ProvinceLayer: React.FC = () => {
         ownerColor: owner?.color ?? '#888',
         isConquered: prov.countryId !== prov.originalCountryId,
         name: prov.name,
+        development: prov.development,
         morale: prov.morale,
         buildingCount: prov.buildings.length,
+        resourceProduction: prov.resourceProduction,
         centroidX: centroid.x,
         centroidY: centroid.y,
         minX: bounds.minX,
@@ -99,7 +101,12 @@ const ProvinceLayer: React.FC = () => {
   return (
     <>
       {/* Layer 1: Static province fills — rarely re-renders */}
-      <StaticGeometryLayer provinces={visibleProvinces} showProvinceBorders={showProvinceBorders} />
+      <StaticGeometryLayer
+        provinces={visibleProvinces}
+        showProvinceBorders={showProvinceBorders}
+        mapLayer={mapLayer}
+        troopCounts={troopCounts}
+      />
 
       {/* Province detection is now pixel-based via ProvinceManager (handled in WorldMap) */}
 
@@ -111,6 +118,7 @@ const ProvinceLayer: React.FC = () => {
         provinces={visibleProvinces}
         selectedProvinceId={selectedProvinceId}
         selectedCountryId={selectedCountryId}
+        hoveredProvinceId={hoveredProvince}
         moveTargets={moveTargets}
         zoom={zoom}
         troopCounts={troopCounts}

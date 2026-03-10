@@ -1,63 +1,212 @@
-import React from 'react';
-import CountryLayer from './CountryLayer';
-import TerrainLayer from './TerrainLayer';
-import ProvinceLayer from './ProvinceLayer';
-import ArmyLayer from './ArmyLayer';
-import { cameraToViewBoxString, CameraState } from './mapViewport';
+import React, { useEffect, useMemo, useRef } from 'react';
+import { getProvinceBounds, getProvinceCentroid } from '@/data/provinceGeometry';
+import { Province, Country, Army, ActiveBattle } from '@/types/game';
+import { UNIT_STATS } from '@/data/unitStats';
+
+import { ProvinceRenderer, ProvinceRenderData } from './ProvinceRenderer';
+import { UnitRenderArmy, UnitRenderBattle, UnitRenderer } from './UnitRenderer';
+import { CameraState, ScreenSize } from './mapViewport';
+import { MapLayerMode } from './mapConstants';
 
 interface MapRendererProps {
   camera: CameraState;
-  isPanning: boolean;
-  moveMode: boolean;
+  containerSize: ScreenSize;
+  provinces: Record<string, Province>;
+  countries: Record<string, Country>;
+  armies: Record<string, Army>;
+  activeBattles: ActiveBattle[];
+  playerCountryId: string;
+  selectedCountryId: string | null;
+  selectedProvinceId: string | null;
+  selectedArmyIds: string[];
+  hoveredProvinceId: string | null;
+  moveTargets: Set<string>;
+  mapLayer: MapLayerMode;
+  showProvinceBorders: boolean;
+  showDetails: boolean;
 }
 
 /**
- * Main SVG renderer. Uses a dynamic viewBox derived from camera state
- * instead of CSS transforms, giving crisp vector rendering at all zooms.
+ * Main map renderer. Uses layered canvases and imperative renderers so React
+ * does not rebuild map geometry on every interaction update.
  */
-const MapRenderer: React.FC<MapRendererProps> = ({ camera, isPanning, moveMode }) => {
-  const viewBox = cameraToViewBoxString(camera);
-  // Scale stroke widths relative to zoom so they stay reasonable
-  const baseStroke = 0.3 / camera.zoom;
+const MapRenderer: React.FC<MapRendererProps> = ({
+  camera,
+  containerSize,
+  provinces,
+  countries,
+  armies,
+  activeBattles,
+  playerCountryId,
+  selectedCountryId,
+  selectedProvinceId,
+  selectedArmyIds,
+  hoveredProvinceId,
+  moveTargets,
+  mapLayer,
+  showProvinceBorders,
+  showDetails,
+}) => {
+  const baseCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const overlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const unitsCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const provinceRendererRef = useRef<ProvinceRenderer | null>(null);
+  const unitRendererRef = useRef<UnitRenderer | null>(null);
+
+  const provinceRenderData = useMemo<ProvinceRenderData[]>(() => {
+    return Object.values(provinces).map(province => {
+      const owner = countries[province.countryId];
+      const centroid = getProvinceCentroid(province.id);
+      const bounds = getProvinceBounds(province.id);
+      return {
+        id: province.id,
+        countryId: province.countryId,
+        geometry: province.geometry,
+        terrain: province.terrain,
+        ownerColor: owner?.color ?? '#888888',
+        isConquered: province.countryId !== province.originalCountryId,
+        development: province.development,
+        morale: province.morale,
+        buildingCount: province.buildings.length,
+        resourceProduction: province.resourceProduction,
+        centroidX: centroid.x,
+        centroidY: centroid.y,
+        minX: bounds.minX,
+        minY: bounds.minY,
+        maxX: bounds.maxX,
+        maxY: bounds.maxY,
+        boundsW: bounds.w,
+        boundsH: bounds.h,
+      };
+    });
+  }, [countries, provinces]);
+
+  const troopCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const army of Object.values(armies)) {
+      if (army.targetProvinceId) continue;
+      counts[army.provinceId] = (counts[army.provinceId] ?? 0) + army.units.reduce((sum, unit) => sum + unit.count, 0);
+    }
+    return counts;
+  }, [armies]);
+
+  const armyRenderData = useMemo<UnitRenderArmy[]>(() => {
+    return Object.values(armies).map(army => {
+      const centroid = getProvinceCentroid(army.provinceId);
+      const targetCentroid = army.targetProvinceId ? getProvinceCentroid(army.targetProvinceId) : null;
+      const totalUnits = army.units.reduce((sum, unit) => sum + unit.count, 0);
+      const averageHealth = totalUnits > 0
+        ? army.units.reduce((sum, unit) => sum + unit.health * unit.count, 0) / totalUnits
+        : 0;
+
+      let icon = '🎖';
+      let maxCount = -1;
+      for (const unit of army.units) {
+        if (unit.count > maxCount) {
+          maxCount = unit.count;
+          icon = UNIT_STATS[unit.type].icon;
+        }
+      }
+
+      return {
+        army,
+        x: centroid.x,
+        y: centroid.y,
+        targetX: targetCentroid?.x,
+        targetY: targetCentroid?.y,
+        totalUnits,
+        averageHealth,
+        icon,
+      };
+    });
+  }, [armies]);
+
+  const battleRenderData = useMemo<UnitRenderBattle[]>(() => {
+    return activeBattles.map(battle => {
+      const centroid = getProvinceCentroid(battle.provinceId);
+      return {
+        provinceId: battle.provinceId,
+        x: centroid.x,
+        y: centroid.y,
+      };
+    });
+  }, [activeBattles]);
+
+  useEffect(() => {
+    if (!baseCanvasRef.current || !overlayCanvasRef.current || !unitsCanvasRef.current) {
+      return;
+    }
+
+    if (!provinceRendererRef.current) {
+      provinceRendererRef.current = new ProvinceRenderer(baseCanvasRef.current, overlayCanvasRef.current);
+    }
+
+    if (!unitRendererRef.current) {
+      unitRendererRef.current = new UnitRenderer(unitsCanvasRef.current);
+    }
+  }, []);
+
+  useEffect(() => {
+    const dpr = typeof window !== 'undefined' ? Math.max(1, window.devicePixelRatio || 1) : 1;
+    provinceRendererRef.current?.resize(containerSize, dpr);
+    unitRendererRef.current?.resize(containerSize, dpr);
+  }, [containerSize]);
+
+  useEffect(() => {
+    provinceRendererRef.current?.render({
+      provinces: provinceRenderData,
+      troopCounts,
+      mapLayer,
+      camera,
+      containerSize,
+      showProvinceBorders,
+      showDetails,
+      selectedProvinceId,
+      selectedCountryId,
+      hoveredProvinceId,
+      moveTargets,
+    });
+  }, [
+    provinceRenderData,
+    troopCounts,
+    mapLayer,
+    camera,
+    containerSize,
+    showProvinceBorders,
+    showDetails,
+    selectedProvinceId,
+    selectedCountryId,
+    hoveredProvinceId,
+    moveTargets,
+  ]);
+
+  useEffect(() => {
+    unitRendererRef.current?.render({
+      armies: armyRenderData,
+      battles: battleRenderData,
+      countries,
+      playerCountryId,
+      selectedArmyIds,
+      viewport: {
+        minX: camera.centerX - 800 / (2 * camera.zoom),
+        minY: camera.centerY - 450 / (2 * camera.zoom),
+        maxX: camera.centerX + 800 / (2 * camera.zoom),
+        maxY: camera.centerY + 450 / (2 * camera.zoom),
+        width: 800 / camera.zoom,
+        height: 450 / camera.zoom,
+      },
+      camera,
+      containerSize,
+      mapLayer,
+    });
+  }, [armyRenderData, battleRenderData, camera, containerSize, countries, mapLayer, playerCountryId, selectedArmyIds]);
 
   return (
-    <svg
-      viewBox={viewBox}
-      className="w-full h-full"
-      preserveAspectRatio="xMidYMid meet"
-      style={{
-        cursor: moveMode ? 'crosshair' : isPanning ? 'grabbing' : 'grab',
-      }}
-    >
-      <defs>
-        <filter id="glow"><feGaussianBlur stdDeviation="3" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
-        <filter id="battleGlow"><feGaussianBlur stdDeviation="4" result="blur" /><feMerge><feMergeNode in="blur" /><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge></filter>
-        <filter id="terrainNoise">
-          <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" />
-        </filter>
-        <pattern id="gridPattern" width="25" height="25" patternUnits="userSpaceOnUse">
-          <line x1="25" y1="0" x2="25" y2="25" stroke="hsl(225, 18%, 16%)" strokeWidth={baseStroke} opacity="0.2" />
-          <line x1="0" y1="25" x2="25" y2="25" stroke="hsl(225, 18%, 16%)" strokeWidth={baseStroke} opacity="0.2" />
-        </pattern>
-        <marker id="arrowhead" markerWidth="6" markerHeight="4" refX="5" refY="2" orient="auto">
-          <polygon points="0 0, 6 2, 0 4" fill="hsl(42, 100%, 58%)" opacity="0.8" />
-        </marker>
-        <marker id="arrowheadRed" markerWidth="6" markerHeight="4" refX="5" refY="2" orient="auto">
-          <polygon points="0 0, 6 2, 0 4" fill="hsl(0, 72%, 51%)" opacity="0.8" />
-        </marker>
-      </defs>
-      <rect width="800" height="450" fill="url(#gridPattern)" />
-
-      {/* Ocean / water base */}
-      <rect width="800" height="450" fill="hsl(var(--map-water))" opacity="0.15" />
-
-      {/* Terrain / landmass base layer */}
-      <TerrainLayer />
-      <CountryLayer />
-
-      <ProvinceLayer />
-      <ArmyLayer />
-    </svg>
+    <div className="absolute inset-0 pointer-events-none">
+      <canvas ref={baseCanvasRef} className="absolute inset-0 h-full w-full" />
+      <canvas ref={overlayCanvasRef} className="absolute inset-0 h-full w-full" />
+      <canvas ref={unitsCanvasRef} className="absolute inset-0 h-full w-full" />
+    </div>
   );
 };
 

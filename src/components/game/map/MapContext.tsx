@@ -1,7 +1,10 @@
 import React, { createContext, useContext } from 'react';
 import { WorldViewport } from './mapViewport';
+import { MapLayerMode } from './mapConstants';
 
 export interface MapContextType {
+  mapLayer: MapLayerMode;
+  setMapLayer: (layer: MapLayerMode) => void;
   zoom: number;
   isZooming: boolean;
   showProvinces: boolean;
