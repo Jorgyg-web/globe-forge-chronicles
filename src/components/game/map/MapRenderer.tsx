@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef } from 'react';
-import { getProvinceBounds, getProvinceCentroid } from '@/data/provinceGeometry';
+import { computeBounds, getProvinceBounds, getProvinceCentroid } from '@/data/provinceGeometry';
 import { Province, Country, Army, ActiveBattle } from '@/types/game';
 import { UNIT_STATS } from '@/data/unitStats';
+import { getCachedWorldData } from '@/map/worldGenerator';
 
-import { ProvinceRenderer, ProvinceRenderData } from './ProvinceRenderer';
+import { CountryRenderData, ProvinceRenderer, ProvinceRenderData } from './ProvinceRenderer';
 import { UnitRenderArmy, UnitRenderBattle, UnitRenderer } from './UnitRenderer';
 import { CameraState, ScreenSize } from './mapViewport';
 import { MapLayerMode } from './mapConstants';
@@ -23,6 +24,7 @@ interface MapRendererProps {
   moveTargets: Set<string>;
   mapLayer: MapLayerMode;
   showProvinceBorders: boolean;
+  showProvinces: boolean;
   showDetails: boolean;
 }
 
@@ -45,6 +47,7 @@ const MapRenderer: React.FC<MapRendererProps> = ({
   moveTargets,
   mapLayer,
   showProvinceBorders,
+  showProvinces,
   showDetails,
 }) => {
   const baseCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -89,6 +92,96 @@ const MapRenderer: React.FC<MapRendererProps> = ({
     }
     return counts;
   }, [armies]);
+
+  const countryRenderData = useMemo<CountryRenderData[]>(() => {
+    const countryMetrics = new Map<string, {
+      provinceCount: number;
+      developmentTotal: number;
+      buildingTotal: number;
+      militaryStrength: number;
+      resourceProduction: Province['resourceProduction'];
+    }>();
+
+    for (const province of Object.values(provinces)) {
+      const current = countryMetrics.get(province.countryId) ?? {
+        provinceCount: 0,
+        developmentTotal: 0,
+        buildingTotal: 0,
+        militaryStrength: 0,
+        resourceProduction: {
+          food: 0,
+          steel: 0,
+          oil: 0,
+          rareMetals: 0,
+          manpower: 0,
+        },
+      };
+
+      current.provinceCount += 1;
+      current.developmentTotal += province.development;
+      current.buildingTotal += province.buildings.length;
+      current.resourceProduction.food += province.resourceProduction.food;
+      current.resourceProduction.steel += province.resourceProduction.steel;
+      current.resourceProduction.oil += province.resourceProduction.oil;
+      current.resourceProduction.rareMetals += province.resourceProduction.rareMetals;
+      current.resourceProduction.manpower += province.resourceProduction.manpower;
+
+      countryMetrics.set(province.countryId, current);
+    }
+
+    for (const army of Object.values(armies)) {
+      const province = provinces[army.provinceId];
+      if (!province) continue;
+
+      const current = countryMetrics.get(province.countryId);
+      if (!current) continue;
+
+      current.militaryStrength += army.units.reduce((sum, unit) => sum + unit.count, 0);
+    }
+
+    const maxMilitaryStrength = Math.max(
+      1,
+      ...Array.from(countryMetrics.values(), metric => metric.militaryStrength),
+    );
+
+    const worldData = getCachedWorldData();
+    if (!worldData) return [];
+
+    return Object.entries(worldData.countryPaths).map(([countryId, geometry]) => {
+      const owner = countries[countryId];
+      const metrics = countryMetrics.get(countryId);
+      const bounds = computeBounds(geometry);
+      const centroid = worldData.countryCentroids[countryId] ?? {
+        x: bounds.minX + bounds.w / 2,
+        y: bounds.minY + bounds.h / 2,
+      };
+
+      return {
+        id: countryId,
+        geometry,
+        ownerColor: owner?.color ?? '#888888',
+        centroidX: centroid.x,
+        centroidY: centroid.y,
+        minX: bounds.minX,
+        minY: bounds.minY,
+        maxX: bounds.maxX,
+        maxY: bounds.maxY,
+        boundsW: bounds.w,
+        boundsH: bounds.h,
+        provinceCount: metrics?.provinceCount ?? 0,
+        averageDevelopment: metrics ? metrics.developmentTotal / Math.max(1, metrics.provinceCount) : 0,
+        averageBuildingCount: metrics ? metrics.buildingTotal / Math.max(1, metrics.provinceCount) : 0,
+        militaryStrengthRatio: (metrics?.militaryStrength ?? 0) / maxMilitaryStrength,
+        resourceProduction: metrics?.resourceProduction ?? {
+          food: 0,
+          steel: 0,
+          oil: 0,
+          rareMetals: 0,
+          manpower: 0,
+        },
+      };
+    });
+  }, [armies, countries, provinces]);
 
   const armyRenderData = useMemo<UnitRenderArmy[]>(() => {
     return Object.values(armies).map(army => {
@@ -154,12 +247,14 @@ const MapRenderer: React.FC<MapRendererProps> = ({
 
   useEffect(() => {
     provinceRendererRef.current?.render({
+      countries: countryRenderData,
       provinces: provinceRenderData,
       troopCounts,
       mapLayer,
       camera,
       containerSize,
       showProvinceBorders,
+      showProvinces,
       showDetails,
       selectedProvinceId,
       selectedCountryId,
@@ -167,12 +262,14 @@ const MapRenderer: React.FC<MapRendererProps> = ({
       moveTargets,
     });
   }, [
+    countryRenderData,
     provinceRenderData,
     troopCounts,
     mapLayer,
     camera,
     containerSize,
     showProvinceBorders,
+    showProvinces,
     showDetails,
     selectedProvinceId,
     selectedCountryId,

@@ -38,13 +38,34 @@ export interface ProvinceRenderData {
   boundsH: number;
 }
 
+export interface CountryRenderData {
+  id: string;
+  geometry: string;
+  ownerColor: string;
+  centroidX: number;
+  centroidY: number;
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+  boundsW: number;
+  boundsH: number;
+  provinceCount: number;
+  averageDevelopment: number;
+  averageBuildingCount: number;
+  militaryStrengthRatio: number;
+  resourceProduction: Province['resourceProduction'];
+}
+
 export interface ProvinceRendererParams {
+  countries: CountryRenderData[];
   provinces: ProvinceRenderData[];
   troopCounts: Record<string, number>;
   mapLayer: MapLayerMode;
   camera: CameraState;
   containerSize: ScreenSize;
   showProvinceBorders: boolean;
+  showProvinces: boolean;
   showDetails: boolean;
   selectedProvinceId: string | null;
   selectedCountryId: string | null;
@@ -62,6 +83,14 @@ interface ProvinceVisualStyle {
   ownerOverlayAlpha: number;
   militaryOverlayColor: string | null;
   militaryOverlayAlpha: number;
+}
+
+interface CountryVisualStyle {
+  baseFill: string;
+  baseAlpha: number;
+  borderColor: string;
+  borderAlpha: number;
+  borderWidth: number;
 }
 
 function setCanvasWorldTransform(
@@ -119,6 +148,21 @@ function getOverlayStrokePixels(kind: 'hover' | 'country' | 'move' | 'selected',
     case 'selected':
     default:
       return Math.max(0.34, 1.1 - Math.log2(zoom + 1) * 0.2);
+  }
+}
+
+function getCountryBorderPixels(mapLayer: MapLayerMode, zoom: number): number {
+  switch (mapLayer) {
+    case 'military':
+      return Math.max(0.5, 1.2 - Math.log2(zoom + 1) * 0.1);
+    case 'economic':
+    case 'resource':
+      return Math.max(0.45, 1.05 - Math.log2(zoom + 1) * 0.08);
+    case 'terrain':
+      return Math.max(0.38, 0.96 - Math.log2(zoom + 1) * 0.08);
+    case 'political':
+    default:
+      return Math.max(0.42, 1.08 - Math.log2(zoom + 1) * 0.08);
   }
 }
 
@@ -206,6 +250,59 @@ function getProvinceVisualStyle(
   }
 }
 
+function getCountryVisualStyle(
+  country: CountryRenderData,
+  mapLayer: MapLayerMode,
+  showProvinceBorders: boolean,
+): CountryVisualStyle {
+  switch (mapLayer) {
+    case 'terrain':
+      return {
+        baseFill: 'hsl(96, 18%, 30%)',
+        baseAlpha: 0.94,
+        borderColor: 'rgba(19, 26, 38, 0.9)',
+        borderAlpha: showProvinceBorders ? 0.78 : 0.62,
+        borderWidth: showProvinceBorders ? 0.58 : 0.48,
+      };
+    case 'military':
+      return {
+        baseFill: country.ownerColor,
+        baseAlpha: 0.24 + country.militaryStrengthRatio * 0.48,
+        borderColor: country.militaryStrengthRatio > 0.45 ? 'rgba(239, 68, 68, 0.92)' : 'rgba(20, 25, 36, 0.9)',
+        borderAlpha: showProvinceBorders ? 0.84 : 0.72,
+        borderWidth: country.militaryStrengthRatio > 0.45 ? 0.7 : 0.54,
+      };
+    case 'economic':
+      return {
+        baseFill: getEconomicFill({
+          development: country.averageDevelopment,
+          buildings: { length: country.averageBuildingCount },
+        }),
+        baseAlpha: 0.94,
+        borderColor: 'rgba(8, 32, 42, 0.86)',
+        borderAlpha: showProvinceBorders ? 0.72 : 0.62,
+        borderWidth: showProvinceBorders ? 0.58 : 0.48,
+      };
+    case 'resource':
+      return {
+        baseFill: getResourceFill({ resourceProduction: country.resourceProduction }),
+        baseAlpha: 0.94,
+        borderColor: 'rgba(18, 16, 28, 0.9)',
+        borderAlpha: showProvinceBorders ? 0.74 : 0.64,
+        borderWidth: showProvinceBorders ? 0.58 : 0.48,
+      };
+    case 'political':
+    default:
+      return {
+        baseFill: country.ownerColor,
+        baseAlpha: 0.9,
+        borderColor: 'rgba(12, 18, 30, 0.96)',
+        borderAlpha: showProvinceBorders ? 0.86 : 0.72,
+        borderWidth: showProvinceBorders ? 0.62 : 0.5,
+      };
+  }
+}
+
 function styleToSnapshot(style: ProvinceVisualStyle): string {
   return [
     style.baseFill,
@@ -225,6 +322,8 @@ export class ProvinceRenderer {
   private readonly overlayCanvas: HTMLCanvasElement;
   private readonly baseCtx: CanvasRenderingContext2D;
   private readonly overlayCtx: CanvasRenderingContext2D;
+  private readonly countryPathCache = new Map<string, Path2D>();
+  private readonly countryCache = new Map<string, CountryRenderData>();
   private readonly pathCache = new Map<string, Path2D>();
   private readonly provinceCache = new Map<string, ProvinceRenderData>();
   private readonly provinceStyles = new Map<string, ProvinceVisualStyle>();
@@ -262,10 +361,30 @@ export class ProvinceRenderer {
   }
 
   render(params: ProvinceRendererParams): void {
+    this.syncCountryData(params.countries);
     this.syncProvinceData(params.provinces);
     this.updateProvinceStyles(params.provinces, params.troopCounts, params.mapLayer, params.showProvinceBorders);
     this.renderBase(params);
     this.renderOverlay(params);
+  }
+
+  private syncCountryData(countries: CountryRenderData[]): void {
+    const activeIds = new Set<string>();
+
+    for (const country of countries) {
+      activeIds.add(country.id);
+      this.countryCache.set(country.id, country);
+      if (!this.countryPathCache.has(country.id)) {
+        this.countryPathCache.set(country.id, new Path2D(country.geometry));
+      }
+    }
+
+    for (const id of Array.from(this.countryCache.keys())) {
+      if (!activeIds.has(id)) {
+        this.countryCache.delete(id);
+        this.countryPathCache.delete(id);
+      }
+    }
   }
 
   private syncProvinceData(provinces: ProvinceRenderData[]): void {
@@ -308,15 +427,49 @@ export class ProvinceRenderer {
     }
   }
 
-  private renderBase({ provinces, camera, containerSize, mapLayer }: ProvinceRendererParams): void {
+  private renderBase({ countries, provinces, camera, containerSize, mapLayer, showProvinceBorders, showProvinces }: ProvinceRendererParams): void {
     const ctx = this.baseCtx;
     const dpr = this.currentDpr;
     const viewport: WorldViewport = computeViewportWorldBounds(camera, containerSize, 24);
-    const visibleProvinces = provinces.filter(province => boundsIntersectViewport(province, viewport));
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, containerSize.width, containerSize.height);
     setCanvasWorldTransform(ctx, camera, containerSize, dpr);
+
+    if (!showProvinces) {
+      const visibleCountries = countries.filter(country => boundsIntersectViewport(country, viewport));
+
+      for (const country of visibleCountries) {
+        const path = this.countryPathCache.get(country.id);
+        if (!path) continue;
+
+        const style = getCountryVisualStyle(country, mapLayer, showProvinceBorders);
+
+        ctx.save();
+        ctx.globalAlpha = style.baseAlpha;
+        ctx.fillStyle = style.baseFill;
+        ctx.fill(path, 'evenodd');
+
+        if (style.borderWidth > 0 && style.borderAlpha > 0) {
+          ctx.globalAlpha = style.borderAlpha;
+          ctx.strokeStyle = style.borderColor;
+          ctx.lineWidth = screenPixelsToWorldUnits(
+            getCountryBorderPixels(mapLayer, camera.zoom),
+            camera,
+            containerSize,
+          );
+          ctx.lineJoin = 'round';
+          ctx.lineCap = 'round';
+          ctx.stroke(path);
+        }
+
+        ctx.restore();
+      }
+
+      return;
+    }
+
+    const visibleProvinces = provinces.filter(province => boundsIntersectViewport(province, viewport));
 
     for (const province of visibleProvinces) {
       const path = this.pathCache.get(province.id);
@@ -358,11 +511,13 @@ export class ProvinceRenderer {
   }
 
   private renderOverlay({
+    countries,
     provinces,
     troopCounts,
     mapLayer,
     camera,
     containerSize,
+    showProvinces,
     showDetails,
     selectedProvinceId,
     selectedCountryId,
@@ -378,6 +533,48 @@ export class ProvinceRenderer {
     setCanvasWorldTransform(ctx, camera, containerSize, dpr);
 
     const visibleProvinces = provinces.filter(province => boundsIntersectViewport(province, viewport));
+    const hoveredCountryId = hoveredProvinceId ? this.provinceCache.get(hoveredProvinceId)?.countryId ?? null : null;
+
+    if (!showProvinces) {
+      const visibleCountries = countries.filter(country => boundsIntersectViewport(country, viewport));
+
+      if (hoveredCountryId && hoveredCountryId !== selectedCountryId) {
+        this.strokeCountry(
+          ctx,
+          hoveredCountryId,
+          'rgba(250, 204, 21, 0.98)',
+          screenPixelsToWorldUnits(getOverlayStrokePixels('hover', camera.zoom), camera, containerSize),
+        );
+      }
+
+      if (selectedCountryId) {
+        this.strokeCountry(
+          ctx,
+          selectedCountryId,
+          'rgba(96, 165, 250, 0.76)',
+          screenPixelsToWorldUnits(getOverlayStrokePixels('selected', camera.zoom), camera, containerSize),
+        );
+      }
+
+      for (const targetId of moveTargets) {
+        const province = this.provinceCache.get(targetId);
+        if (!province || !boundsIntersectViewport(province, viewport)) continue;
+
+        const path = this.pathCache.get(targetId);
+        if (!path) continue;
+
+        ctx.save();
+        ctx.fillStyle = 'rgba(34, 197, 94, 0.24)';
+        ctx.strokeStyle = 'rgba(34, 197, 94, 0.86)';
+        ctx.lineWidth = screenPixelsToWorldUnits(getOverlayStrokePixels('move', camera.zoom), camera, containerSize);
+        ctx.lineJoin = 'round';
+        ctx.fill(path, 'evenodd');
+        ctx.stroke(path);
+        ctx.restore();
+      }
+
+      return;
+    }
 
     const hoveredProvince = hoveredProvinceId ? this.provinceCache.get(hoveredProvinceId) : null;
     if (hoveredProvince && hoveredProvince.id !== selectedProvinceId) {
@@ -458,6 +655,24 @@ export class ProvinceRenderer {
       if (province.boundsW <= 10 || province.boundsH <= 8) continue;
       this.drawProvinceDetails(ctx, province, troopCounts[province.id] ?? 0, camera, containerSize);
     }
+  }
+
+  private strokeCountry(
+    ctx: CanvasRenderingContext2D,
+    countryId: string,
+    strokeStyle: string,
+    lineWidth: number,
+  ): void {
+    const path = this.countryPathCache.get(countryId);
+    if (!path) return;
+
+    ctx.save();
+    ctx.strokeStyle = strokeStyle;
+    ctx.lineWidth = lineWidth;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.stroke(path);
+    ctx.restore();
   }
 
   private strokeProvince(

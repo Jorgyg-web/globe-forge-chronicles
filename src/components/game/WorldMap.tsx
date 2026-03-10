@@ -348,6 +348,7 @@ const WorldMap = () => {
           moveTargets={moveTargets}
           mapLayer={mapLayer}
           showProvinceBorders={camera.zoom >= 1.5}
+          showProvinces={showProvinces}
           showDetails={showDetails}
         />
         <LabelLayer camera={camera} containerSize={containerSize} />

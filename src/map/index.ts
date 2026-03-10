@@ -46,7 +46,7 @@ export {
 } from './geometryValidator';
 export { subdivideGeometry, computeTargetProvinces, clipRingToRect, getRegionName } from './subdividePolygon';
 export { projectPoint, ringToSvgPath, polygonToSvgPath, multiPolygonToSvgPath, normalizedGeometryToSvgPath, normalizedPolygonToSvgPath, getDefaultProjectionConfig } from './projection';
-export { ProvinceManager, packRGB, PROV_MAP_WIDTH, PROV_MAP_HEIGHT, PROV_SCALE_X, PROV_SCALE_Y } from './ProvinceManager';
+export { default as ProvinceManager, packRGB, PROV_MAP_WIDTH, PROV_MAP_HEIGHT, PROV_SCALE_X, PROV_SCALE_Y } from './ProvinceManager';
 export type { ProvinceColorEntry, ProvinceMapData, ProvinceHighlightConfig } from './ProvinceManager';
 export type { ProjectionConfig } from './projection';
 export type { NormalizedGeometry, NormalizedPolygon, GeoRing, GeoPoint, GeometryValidation } from './geometryValidator';
