@@ -8,6 +8,16 @@ import { TECHNOLOGIES } from '../data/technologies';
 import { getProvincesForCountry } from '@/data/provinces';
 import { nextRandom } from '@/lib/deterministicRandom';
 import { findProvincePath } from './pathfinding';
+import {
+  changeRelationPair,
+  countriesAllied,
+  offerPeace,
+  processDiplomacyTurn,
+  proposeAlliance,
+  proposeTrade,
+  setEmbargoState,
+} from './diplomacy';
+import { decideAIDiplomacy } from './aiDiplomacy';
 
 // ─── Pure function game engine ───
 
@@ -34,11 +44,12 @@ export function processAction(state: GameState, action: GameAction): GameState {
     case 'CANCEL_RESEARCH': return handleCancelResearch(state, action.countryId, action.techId);
 
     case 'DECLARE_WAR': return handleDeclareWar(state, action.attackerId, action.defenderId);
-    case 'PROPOSE_ALLIANCE': return handleAlliance(state, action.fromId, action.toId, action.allianceType);
-    case 'PROPOSE_TRADE': return handleTrade(state, action.fromId, action.toId, action.value);
-    case 'SET_EMBARGO': return handleEmbargo(state, action.countryId, action.targetId, true);
-    case 'REMOVE_EMBARGO': return handleEmbargo(state, action.countryId, action.targetId, false);
-    case 'OFFER_PEACE': return handlePeace(state, action.fromId, action.toId);
+    case 'PROPOSE_ALLIANCE': return proposeAlliance(state, action.fromId, action.toId, action.allianceType);
+    case 'PROPOSE_TRADE': return proposeTrade(state, action.fromId, action.toId, action.value);
+    case 'CHANGE_RELATIONS': return changeRelationPair(state, action.fromId, action.toId, action.amount);
+    case 'SET_EMBARGO': return setEmbargoState(state, action.countryId, action.targetId, true);
+    case 'REMOVE_EMBARGO': return setEmbargoState(state, action.countryId, action.targetId, false);
+    case 'OFFER_PEACE': return offerPeace(state, action.fromId, action.toId);
 
     default: return state;
   }
@@ -366,6 +377,7 @@ function handleCancelResearch(state: GameState, countryId: CountryId, techId: st
 
 // ─── Diplomacy ───
 function handleDeclareWar(state: GameState, attackerId: CountryId, defenderId: CountryId): GameState {
+  if (attackerId === defenderId || countriesAllied(state, attackerId, defenderId)) return state;
   let s = state;
   let warId: string;
   let eventId: string;
@@ -381,62 +393,14 @@ function handleDeclareWar(state: GameState, attackerId: CountryId, defenderId: C
     description: `${state.countries[attackerId].name} has declared war on ${state.countries[defenderId].name}`,
     countryId: attackerId,
   };
-  s = { ...s, wars: [...s.wars, war], events: [...s.events, event] };
-  s = updateCountry(s, attackerId, c => ({ ...c, diplomacy: { ...c.diplomacy, relations: { ...c.diplomacy.relations, [defenderId]: -100 } } }));
-  s = updateCountry(s, defenderId, c => ({ ...c, diplomacy: { ...c.diplomacy, relations: { ...c.diplomacy.relations, [attackerId]: -100 } } }));
+  s = {
+    ...s,
+    wars: [...s.wars, war],
+    tradeAgreements: s.tradeAgreements.filter(trade => !trade.countries.includes(attackerId) || !trade.countries.includes(defenderId)),
+    events: [...s.events, event],
+  };
+  s = changeRelationPair(s, attackerId, defenderId, -200);
   return s;
-}
-
-function handleAlliance(state: GameState, fromId: CountryId, toId: CountryId, allianceType: 'military' | 'economic' | 'both'): GameState {
-  const rel = state.countries[toId]?.diplomacy.relations[fromId] ?? 0;
-  if (rel < 30) return state;
-  let s = state;
-  let allianceId: string;
-  [allianceId, s] = allocateEntityId(s, 'alliance');
-  const alliance = {
-    id: allianceId,
-    name: `${state.countries[fromId].name}-${state.countries[toId].name}`,
-    members: [fromId, toId], type: allianceType,
-  };
-  return { ...s, alliances: [...s.alliances, alliance] };
-}
-
-function handleTrade(state: GameState, fromId: CountryId, toId: CountryId, value: number): GameState {
-  const rel = state.countries[toId]?.diplomacy.relations[fromId] ?? 0;
-  if (rel < 0) return state;
-  let s = state;
-  let tradeId: string;
-  [tradeId, s] = allocateEntityId(s, 'trade');
-  return { ...s, tradeAgreements: [...s.tradeAgreements, { id: tradeId, countries: [fromId, toId], value, type: 'bilateral' }] };
-}
-
-function handleEmbargo(state: GameState, countryId: CountryId, targetId: CountryId, add: boolean): GameState {
-  return updateCountry(state, countryId, c => ({
-    ...c,
-    diplomacy: {
-      ...c.diplomacy,
-      embargoes: add ? [...c.diplomacy.embargoes, targetId] : c.diplomacy.embargoes.filter(e => e !== targetId),
-      relations: add ? { ...c.diplomacy.relations, [targetId]: Math.max(-100, (c.diplomacy.relations[targetId] ?? 0) - 30) } : c.diplomacy.relations,
-    },
-  }));
-}
-
-function handlePeace(state: GameState, fromId: CountryId, toId: CountryId): GameState {
-  const wars = state.wars.map(w => {
-    if (!w.active) return w;
-    const involves = (w.attackers.includes(fromId) && w.defenders.includes(toId)) ||
-                     (w.defenders.includes(fromId) && w.attackers.includes(toId));
-    return involves ? { ...w, active: false } : w;
-  });
-  let s = state;
-  let eventId: string;
-  [eventId, s] = allocateEntityId(s, 'evt');
-  const event: GameEvent = {
-    id: eventId, turn: state.turn, type: 'diplomacy',
-    title: 'Peace Treaty',
-    description: `${state.countries[fromId].name} and ${state.countries[toId].name} signed a peace treaty`,
-  };
-  return { ...s, wars, events: [...s.events, event] };
 }
 
 // ─── Turn Processing ───
@@ -462,7 +426,9 @@ function processTurn(state: GameState): GameState {
   s = processCombat(s, events);
   // 7. Province morale & rebellion
   s = processProvinceMorale(s);
-  // 8. AI
+  // 8. Diplomacy
+  s = processDiplomacyTurn(s);
+  // 9. AI
   for (const id of Object.keys(s.countries)) {
     if (id !== s.playerCountryId) {
       s = processAI(s, id, events);
@@ -1206,6 +1172,14 @@ function processAI(state: GameState, countryId: CountryId, events: GameEvent[]):
   
   if (provs.length === 0) return s;
 
+  const diplomacyDecision = decideAIDiplomacy(s, countryId);
+  s = diplomacyDecision.state;
+  for (const action of diplomacyDecision.actions) {
+    s = processAction(s, action);
+  }
+  const refreshedCountry = s.countries[countryId];
+  if (!refreshedCountry) return s;
+
   // Identify capital (most populous province as proxy)
   const capital = provs.reduce((max, p) => p.population > max.population ? p : max, provs[0]);
   
@@ -1222,11 +1196,11 @@ function processAI(state: GameState, countryId: CountryId, events: GameEvent[]):
   const totalUnits = myArmies.reduce((sum, a) => sum + a.units.reduce((s2, u) => s2 + u.count, 0), 0);
   
   // 1. Research (high priority)
-  if (country.technology.activeResearch.length < country.researchSlots) {
+  if (refreshedCountry.technology.activeResearch.length < refreshedCountry.researchSlots) {
     const available = TECHNOLOGIES.filter(t =>
-      !country.technology.researched.includes(t.id) &&
-      t.prerequisites.every(p => country.technology.researched.includes(p)) &&
-      !country.technology.activeResearch.some(r => r.techId === t.id)
+      !refreshedCountry.technology.researched.includes(t.id) &&
+      t.prerequisites.every(p => refreshedCountry.technology.researched.includes(p)) &&
+      !refreshedCountry.technology.activeResearch.some(r => r.techId === t.id)
     );
     if (available.length > 0) {
       // Prioritize military tech during war, economic otherwise
@@ -1281,8 +1255,8 @@ function processAI(state: GameState, countryId: CountryId, events: GameEvent[]):
       let quantity = 8;
 
       const borderPressure = prov.adjacentProvinces.some(adjId => enemyIds.has(s.provinces[adjId]?.countryId ?? ''));
-      const canFieldTanks = country.technology.researched.includes('armor_2') && s.countries[countryId].resources.oil >= 120;
-      const canFieldArmoredCars = country.technology.researched.includes('armor_1') && s.countries[countryId].resources.oil >= 60;
+      const canFieldTanks = refreshedCountry.technology.researched.includes('armor_2') && s.countries[countryId].resources.oil >= 120;
+      const canFieldArmoredCars = refreshedCountry.technology.researched.includes('armor_1') && s.countries[countryId].resources.oil >= 60;
 
       if ((atWar || borderPressure) && canFieldTanks) {
         unitType = 'tank';
@@ -1401,7 +1375,7 @@ function processAI(state: GameState, countryId: CountryId, events: GameEvent[]):
             .filter(a => a.countryId === target.countryId)
             .reduce((sum, a) => sum + a.units.reduce((s2, u) => s2 + u.count, 0), 0);
           
-          if (myStrength > enemyStrength * 1.75 && country.stability > 35) {
+          if (myStrength > enemyStrength * 1.75 && refreshedCountry.stability > 35) {
             s = processAction(s, { type: 'DECLARE_WAR', attackerId: countryId, defenderId: target.countryId });
           }
         }

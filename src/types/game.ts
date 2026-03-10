@@ -433,6 +433,7 @@ export type GameAction =
   | { type: 'DECLARE_WAR'; attackerId: CountryId; defenderId: CountryId }
   | { type: 'PROPOSE_ALLIANCE'; fromId: CountryId; toId: CountryId; allianceType: Alliance['type'] }
   | { type: 'PROPOSE_TRADE'; fromId: CountryId; toId: CountryId; value: number }
+  | { type: 'CHANGE_RELATIONS'; fromId: CountryId; toId: CountryId; amount: number }
   | { type: 'SET_EMBARGO'; countryId: CountryId; targetId: CountryId }
   | { type: 'REMOVE_EMBARGO'; countryId: CountryId; targetId: CountryId }
   | { type: 'OFFER_PEACE'; fromId: CountryId; toId: CountryId };

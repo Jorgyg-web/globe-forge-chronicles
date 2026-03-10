@@ -41,8 +41,8 @@ const WorldMap = () => {
     return false;
   }, [selectedArmyIds, state.armies, state.playerCountryId]);
 
-  const showProvinces = camera.zoom >= 1.8;
-  const showDetails = camera.zoom > 3;
+  const showProvinces = camera.zoom >= 4;
+  const showDetails = camera.zoom > 6;
 
   useEffect(() => {
     cameraRef.current = camera;
